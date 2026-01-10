@@ -19,7 +19,7 @@ import { TicketModal } from './TicketModal';
 import type { Ticket } from '@/types';
 
 export function KanbanBoard() {
-  const { board, tickets, moveTicket, setTickets } = useBoardStore();
+  const { board, tickets, moveTicket, setTickets, deleteTicket } = useBoardStore();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
@@ -188,6 +188,10 @@ export function KanbanBoard() {
         <TicketModal
           ticket={selectedTicket}
           onClose={() => setSelectedTicket(null)}
+          onDelete={async () => {
+            await deleteTicket(selectedTicket.id);
+            setSelectedTicket(null);
+          }}
         />
       )}
     </>
