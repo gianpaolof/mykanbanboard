@@ -140,6 +140,104 @@ export const labelApi = {
 };
 
 // ===========================================
+// AGENT API
+// ===========================================
+
+export interface AgentTriageResult {
+  priority?: string;
+  effort?: string;
+  labels?: string[];
+  reasoning: string;
+}
+
+export interface AgentDecomposeResult {
+  subtasks: Array<{
+    title: string;
+    description: string;
+    effort?: string;
+  }>;
+  reasoning: string;
+}
+
+export interface AgentChatResult {
+  response: string;
+  actions?: Array<{
+    type: string;
+    data: Record<string, unknown>;
+  }>;
+}
+
+export interface AgentSearchResult {
+  results: Array<{
+    ticket_id: string;
+    title: string;
+    description: string;
+    score: number;
+  }>;
+}
+
+export interface AgentDailySummaryResult {
+  summary: string;
+  stats: {
+    total: number;
+    by_priority: Record<string, number>;
+    by_status: Record<string, number>;
+  };
+  focus_today: string[];
+}
+
+export const agentApi = {
+  /**
+   * Auto-triage a ticket: assign priority, labels, and effort estimate
+   */
+  triage: (ticketId: string, title: string, description: string) =>
+    invoke<AgentTriageResult>('agent_triage', {
+      ticketId,
+      title,
+      description,
+    }),
+
+  /**
+   * Decompose a complex task into subtasks
+   */
+  decompose: (ticketId: string, title: string, description: string) =>
+    invoke<AgentDecomposeResult>('agent_decompose', {
+      ticketId,
+      title,
+      description,
+    }),
+
+  /**
+   * Chat with the AI agent
+   */
+  chat: (message: string, context?: Record<string, unknown>) =>
+    invoke<AgentChatResult>('agent_chat', {
+      message,
+      context: context ?? null,
+    }),
+
+  /**
+   * Generate daily summary of tickets
+   */
+  dailySummary: () =>
+    invoke<AgentDailySummaryResult>('agent_daily_summary'),
+
+  /**
+   * Semantic search for tickets
+   */
+  search: (query: string, limit?: number) =>
+    invoke<AgentSearchResult>('agent_search', {
+      query,
+      limit: limit ?? null,
+    }),
+
+  /**
+   * Check if agent is available and healthy
+   */
+  health: () => invoke<boolean>('agent_health'),
+};
+
+// ===========================================
 // UNIFIED API
 // ===========================================
 
@@ -148,6 +246,7 @@ export const api = {
   columns: columnApi,
   tickets: ticketApi,
   labels: labelApi,
+  agent: agentApi,
 };
 
 export default api;

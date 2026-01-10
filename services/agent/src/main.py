@@ -60,52 +60,52 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def setup_dspy() -> None:
-    """Configure DSPy with Claude as the language model.
+    """Configure DSPy with the configured LLM provider.
 
-    This sets up the global DSPy configuration to use Claude Sonnet
-    as the primary language model for all DSPy modules.
+    This sets up the global DSPy configuration based on LLM_PROVIDER setting.
+    Supports both OpenAI and Anthropic.
 
     Raises:
-        ValueError: If API key is not configured
+        ValueError: If required API key is not configured
         Exception: If model initialization fails
     """
-    if not settings.anthropic_api_key:
-        raise ValueError("ANTHROPIC_API_KEY is required")
+    provider = settings.llm_provider.lower()
 
-    try:
-        # Configure Claude as the LM
-        lm = dspy.LM(
-            model=f"anthropic/{settings.default_model}",
-            api_key=settings.anthropic_api_key,
-            temperature=0.7,
-            max_tokens=2048,
-        )
+    if provider == "openai":
+        if not settings.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is required when using OpenAI provider")
 
-        # Set as default LM
-        dspy.configure(lm=lm)
-
-        logger.info(f"DSPy configured with {settings.default_model}")
-
-    except Exception as e:
-        logger.error(f"Failed to setup DSPy: {str(e)}")
-
-        # Try fallback to OpenAI if configured
-        if settings.openai_api_key:
-            logger.info(f"Trying fallback model: {settings.fallback_model}")
-            try:
-                lm = dspy.LM(
-                    model=f"openai/{settings.fallback_model}",
-                    api_key=settings.openai_api_key,
-                    temperature=0.7,
-                    max_tokens=2048,
-                )
-                dspy.configure(lm=lm)
-                logger.info(f"Using fallback model: {settings.fallback_model}")
-            except Exception as fallback_error:
-                logger.error(f"Fallback also failed: {str(fallback_error)}")
-                raise
-        else:
+        try:
+            lm = dspy.LM(
+                model=f"openai/{settings.default_model}",
+                api_key=settings.openai_api_key,
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            dspy.configure(lm=lm)
+            logger.info(f"DSPy configured with OpenAI {settings.default_model}")
+        except Exception as e:
+            logger.error(f"Failed to setup OpenAI: {str(e)}")
             raise
+
+    elif provider == "anthropic":
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is required when using Anthropic provider")
+
+        try:
+            lm = dspy.LM(
+                model=f"anthropic/{settings.default_model}",
+                api_key=settings.anthropic_api_key,
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            dspy.configure(lm=lm)
+            logger.info(f"DSPy configured with Anthropic {settings.default_model}")
+        except Exception as e:
+            logger.error(f"Failed to setup Anthropic: {str(e)}")
+            raise
+    else:
+        raise ValueError(f"Unknown LLM provider: {provider}. Use 'openai' or 'anthropic'")
 
 
 # ============================================================================

@@ -61,6 +61,46 @@
 - [x] Supported actions: create, update, move, search, summarize, decompose, none
 - [x] Created chat API endpoint
 
+### TASK-032: POST /api/triage Endpoint ✓
+- [x] Implemented FastAPI endpoint in `src/api/routes.py` (lines 64-108)
+- [x] Integrates with `TriageModule` from DSPy
+- [x] Request validation with `TriageRequest` model
+- [x] Response validation with `TriageResponse` model
+- [x] Labels limited to max 3 items
+- [x] Comprehensive error handling with HTTPException
+- [x] Logging for debugging
+- [x] Maps DSPy output fields correctly (effort_estimate -> effort)
+
+### TASK-033: POST /api/decompose Endpoint ✓
+- [x] Implemented FastAPI endpoint in `src/api/routes.py` (lines 116-175)
+- [x] Integrates with `DecomposeModule` from DSPy
+- [x] Request validation with `DecomposeRequest` model
+- [x] Response validation with `DecomposeResponse` model
+- [x] Robust parsing of subtasks (handles dict and string formats)
+- [x] Dependency parsing with tuple validation
+- [x] Comprehensive error handling
+- [x] Context parameter support
+
+### TASK-034: GET /api/daily-summary Endpoint ✓
+- [x] Implemented FastAPI endpoint in `src/api/routes.py` (lines 289-331)
+- [x] Integrates with `DailySummaryModule` from DSPy
+- [x] Response validation with `DailySummaryResponse` model
+- [x] Accepts ticket lists: in_progress, blocked, due_soon, recently_completed
+- [x] Limits focus_today to 3 items
+- [x] Placeholder ready for real ticket data from frontend
+- [x] Error handling with HTTPException
+
+### TASK-035: POST /api/chat Endpoint ✓
+- [x] Implemented FastAPI endpoint in `src/api/routes.py` (lines 183-224)
+- [x] Integrates with `ActionDeciderModule` from DSPy
+- [x] Request validation with `ChatRequest` model
+- [x] Response validation with `ChatResponse` model
+- [x] Context dictionary support
+- [x] Action routing: create, update, move, search, summarize, decompose, none
+- [x] Dynamic params dictionary parsing
+- [x] Natural language response generation
+- [x] Error handling
+
 ## Additional Features Implemented
 
 ### API Layer

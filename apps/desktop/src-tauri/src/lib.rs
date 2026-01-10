@@ -1,8 +1,10 @@
+mod agent;
 mod commands;
 mod db;
 mod error;
 mod models;
 
+use agent::{start_agent, stop_agent, AgentProcess};
 use db::Database;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -33,7 +35,22 @@ pub fn run() {
             // Store database in app state
             app.manage(db);
 
+            // Initialize agent process state
+            app.manage(AgentProcess::new());
+
+            // Start Python agent sidecar
+            if let Err(e) = start_agent(app.handle()) {
+                eprintln!("Failed to start agent: {}", e);
+                eprintln!("Agent features will be unavailable");
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Stop agent when window is destroyed
+            if let tauri::WindowEvent::Destroyed = event {
+                stop_agent(window.app_handle());
+            }
         })
         .invoke_handler(tauri::generate_handler![
             // Board commands
@@ -58,6 +75,13 @@ pub fn run() {
             commands::delete_label,
             commands::add_label_to_ticket,
             commands::remove_label_from_ticket,
+            // Agent commands
+            agent::agent_triage,
+            agent::agent_decompose,
+            agent::agent_chat,
+            agent::agent_daily_summary,
+            agent::agent_search,
+            agent::agent_health,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

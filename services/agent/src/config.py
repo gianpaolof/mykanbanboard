@@ -15,16 +15,20 @@ class AgentSettings(BaseSettings):
     )
 
     # LLM Configuration
-    anthropic_api_key: str = Field(
-        ...,
-        description="Anthropic API key for Claude",
+    anthropic_api_key: Optional[str] = Field(
+        None,
+        description="Anthropic API key for Claude (optional)",
     )
     openai_api_key: Optional[str] = Field(
         None,
-        description="OpenAI API key (optional, for fallback)",
+        description="OpenAI API key",
+    )
+    llm_provider: str = Field(
+        default="openai",
+        description="LLM provider: 'openai' or 'anthropic'",
     )
     default_model: str = Field(
-        default="claude-sonnet-4-20250514",
+        default="gpt-4o-mini",
         description="Primary LLM model to use",
     )
     fallback_model: str = Field(
