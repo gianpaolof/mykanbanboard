@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -9,10 +9,12 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/tauri';
 import type { AgentChatResult } from '@/lib/tauri';
+import { useBoardStore } from '@/stores/boardStore';
 
 // ===========================================
 // TYPES
@@ -225,6 +227,49 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Get store actions for executing agent commands
+  const { addTicket, columns } = useBoardStore();
+
+  // Execute actions returned by the agent
+  const executeAction = useCallback(async (action: string, params: Record<string, unknown>): Promise<{ type: string; data: Record<string, unknown> } | null> => {
+    try {
+      switch (action) {
+        case 'create_ticket': {
+          // Get first column as default if not specified
+          const targetColumnId = (params.columnId as string) || columns[0]?.id;
+          if (!targetColumnId) {
+            throw new Error('No columns available to create ticket');
+          }
+
+          const newTicket = await addTicket({
+            title: (params.title as string) || 'New Ticket',
+            description: (params.description as string) || '',
+            columnId: targetColumnId,
+            priority: (params.priority as 'urgent' | 'high' | 'medium' | 'low' | 'none') || 'medium',
+            effort: (params.effort as 'xs' | 's' | 'm' | 'l' | 'xl') || 'm',
+          });
+
+          return {
+            type: 'create_ticket',
+            data: { id: newTicket.id, title: newTicket.title },
+          };
+        }
+
+        case 'none':
+        case 'chat':
+          // No action to execute, just conversation
+          return null;
+
+        default:
+          console.warn(`Unknown action: ${action}`);
+          return null;
+      }
+    } catch (err) {
+      console.error('Failed to execute action:', err);
+      throw err;
+    }
+  }, [addTicket, columns]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -280,12 +325,27 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
         chatContext
       );
 
+      // Execute action if present
+      const executedActions: Array<{ type: string; data: Record<string, unknown> }> = [];
+
+      if (result.action && result.action !== 'none' && result.action !== 'chat') {
+        try {
+          const actionResult = await executeAction(result.action, result.params || {});
+          if (actionResult) {
+            executedActions.push(actionResult);
+          }
+        } catch (actionErr) {
+          console.error('Action execution failed:', actionErr);
+          // Still show the response, but note the action failed
+        }
+      }
+
       const assistantMessage: AgentChatMessage = {
         id: generateMessageId(),
         role: 'assistant',
         content: result.response,
         timestamp: new Date().toISOString(),
-        actions: result.actions,
+        actions: executedActions.length > 0 ? executedActions : result.actions,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);

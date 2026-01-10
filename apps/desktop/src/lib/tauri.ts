@@ -161,6 +161,8 @@ export interface AgentDecomposeResult {
 
 export interface AgentChatResult {
   response: string;
+  action?: string;
+  params?: Record<string, unknown>;
   actions?: Array<{
     type: string;
     data: Record<string, unknown>;
