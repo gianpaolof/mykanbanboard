@@ -1,0 +1,795 @@
+use crate::db::Database;
+use crate::error::AppError;
+use crate::models::*;
+use chrono::{DateTime, Utc};
+use rusqlite::OptionalExtension;
+use tauri::State;
+
+// ===========================================
+// BOARD COMMANDS
+// ===========================================
+
+#[tauri::command]
+pub fn get_default_board(db: State<Database>) -> Result<String, String> {
+    db.get_or_create_default_board().map_err(|e| e.into())
+}
+
+// ===========================================
+// COLUMN COMMANDS
+// ===========================================
+
+#[tauri::command]
+pub fn get_columns(db: State<Database>) -> Result<Vec<Column>, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let mut stmt = conn
+        .prepare("SELECT id, name, position, color, wip_limit FROM columns ORDER BY position ASC")
+        .map_err(AppError::from)?;
+
+    let columns = stmt
+        .query_map([], |row| {
+            Ok(Column {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                position: row.get(2)?,
+                color: row.get(3)?,
+                wip_limit: row.get(4)?,
+            })
+        })
+        .map_err(AppError::from)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+
+    Ok(columns)
+}
+
+#[tauri::command]
+pub fn create_column(db: State<Database>, column: CreateColumn) -> Result<Column, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Get board_id (default board)
+    let board_id: String = conn
+        .query_row("SELECT id FROM boards LIMIT 1", [], |row| row.get(0))
+        .map_err(AppError::from)?;
+
+    // Get max position
+    let max_position: Option<i32> = conn
+        .query_row(
+            "SELECT MAX(position) FROM columns WHERE board_id = ?1",
+            [&board_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .flatten();
+
+    let position = max_position.map(|p| p + 1).unwrap_or(0);
+    let id = uuid::Uuid::new_v4().to_string();
+
+    conn.execute(
+        "INSERT INTO columns (id, board_id, name, position, color, wip_limit) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        (&id, &board_id, &column.name, &position, &column.color, &column.wip_limit),
+    )
+    .map_err(AppError::from)?;
+
+    Ok(Column {
+        id,
+        name: column.name,
+        position,
+        color: column.color,
+        wip_limit: column.wip_limit,
+    })
+}
+
+#[tauri::command]
+pub fn update_column(
+    db: State<Database>,
+    id: String,
+    updates: UpdateColumn,
+) -> Result<Column, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Check if column exists
+    let exists: bool = conn
+        .query_row("SELECT 1 FROM columns WHERE id = ?1", [&id], |_| Ok(true))
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !exists {
+        return Err(AppError::NotFound(format!("Column {} not found", id)).into());
+    }
+
+    // Build dynamic UPDATE query
+    let mut query = String::from("UPDATE columns SET ");
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    let mut updates_applied = false;
+
+    if let Some(name) = &updates.name {
+        query.push_str("name = ?, ");
+        params.push(Box::new(name.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(position) = updates.position {
+        query.push_str("position = ?, ");
+        params.push(Box::new(position));
+        updates_applied = true;
+    }
+
+    if let Some(color) = &updates.color {
+        query.push_str("color = ?, ");
+        params.push(Box::new(color.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(wip_limit) = updates.wip_limit {
+        query.push_str("wip_limit = ?, ");
+        params.push(Box::new(wip_limit));
+        updates_applied = true;
+    }
+
+    if !updates_applied {
+        return Err(AppError::InvalidInput("No updates provided".to_string()).into());
+    }
+
+    // Remove trailing comma and space
+    query.truncate(query.len() - 2);
+    query.push_str(" WHERE id = ?");
+    params.push(Box::new(id.clone()));
+
+    // Convert params to references
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    conn.execute(&query, param_refs.as_slice())
+        .map_err(AppError::from)?;
+
+    // Fetch and return updated column
+    let column = conn
+        .query_row(
+            "SELECT id, name, position, color, wip_limit FROM columns WHERE id = ?1",
+            [&id],
+            |row| {
+                Ok(Column {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    position: row.get(2)?,
+                    color: row.get(3)?,
+                    wip_limit: row.get(4)?,
+                })
+            },
+        )
+        .map_err(AppError::from)?;
+
+    Ok(column)
+}
+
+#[tauri::command]
+pub fn delete_column(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Check if column has tickets
+    let ticket_count: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM tickets WHERE column_id = ?1",
+            [&id],
+            |row| row.get(0),
+        )
+        .map_err(AppError::from)?;
+
+    if ticket_count > 0 {
+        return Err(
+            AppError::InvalidInput("Cannot delete column with tickets".to_string()).into(),
+        );
+    }
+
+    let deleted = conn
+        .execute("DELETE FROM columns WHERE id = ?1", [&id])
+        .map_err(AppError::from)?;
+
+    if deleted == 0 {
+        return Err(AppError::NotFound(format!("Column {} not found", id)).into());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reorder_columns(db: State<Database>, column_ids: Vec<String>) -> Result<(), String> {
+    let conn = db.connection();
+    let mut conn = conn.lock().unwrap();
+
+    let tx = conn.savepoint().map_err(AppError::from)?;
+
+    for (position, column_id) in column_ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE columns SET position = ?1 WHERE id = ?2",
+            rusqlite::params![position as i32, column_id],
+        )
+        .map_err(AppError::from)?;
+    }
+
+    tx.commit().map_err(AppError::from)?;
+
+    Ok(())
+}
+
+// ===========================================
+// TICKET COMMANDS
+// ===========================================
+
+#[tauri::command]
+pub fn get_tickets(db: State<Database>, column_id: Option<String>) -> Result<Vec<Ticket>, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let query = if column_id.is_some() {
+        "SELECT id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at
+         FROM tickets WHERE column_id = ?1 ORDER BY position ASC"
+    } else {
+        "SELECT id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at
+         FROM tickets ORDER BY position ASC"
+    };
+
+    let mut stmt = conn.prepare(query).map_err(AppError::from)?;
+
+    let tickets = if let Some(col_id) = column_id {
+        stmt.query_map([col_id], parse_ticket_row)
+            .map_err(AppError::from)?
+    } else {
+        stmt.query_map([], parse_ticket_row)
+            .map_err(AppError::from)?
+    };
+
+    let mut result = Vec::new();
+    for ticket_result in tickets {
+        let mut ticket = ticket_result.map_err(AppError::from)?;
+
+        // Load labels
+        ticket.labels = get_ticket_labels(&conn, &ticket.id)?;
+        // Load comments
+        ticket.comments = get_ticket_comments(&conn, &ticket.id)?;
+
+        result.push(ticket);
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn get_ticket(db: State<Database>, id: String) -> Result<Ticket, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let mut ticket = conn
+        .query_row(
+            "SELECT id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at
+             FROM tickets WHERE id = ?1",
+            [&id],
+            parse_ticket_row,
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(format!("Ticket {} not found", id)))?;
+
+    ticket.labels = get_ticket_labels(&conn, &ticket.id)?;
+    ticket.comments = get_ticket_comments(&conn, &ticket.id)?;
+
+    Ok(ticket)
+}
+
+#[tauri::command]
+pub fn create_ticket(db: State<Database>, ticket: CreateTicket) -> Result<Ticket, String> {
+    let conn = db.connection();
+    let mut conn = conn.lock().unwrap();
+
+    // Verify column exists
+    let column_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM columns WHERE id = ?1",
+            [&ticket.column_id],
+            |_| Ok(true),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !column_exists {
+        return Err(AppError::NotFound(format!(
+            "Column {} not found",
+            ticket.column_id
+        ))
+        .into());
+    }
+
+    // Get max position in column
+    let max_position: Option<i32> = conn
+        .query_row(
+            "SELECT MAX(position) FROM tickets WHERE column_id = ?1",
+            [&ticket.column_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .flatten();
+
+    let position = max_position.map(|p| p + 1).unwrap_or(0);
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now();
+
+    // Parse due_date if provided
+    let due_date = ticket
+        .due_date
+        .as_ref()
+        .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
+        .map(|d| d.with_timezone(&Utc));
+
+    let tx = conn.savepoint().map_err(AppError::from)?;
+
+    tx.execute(
+        "INSERT INTO tickets (id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        (
+            &id,
+            &ticket.title,
+            &ticket.description,
+            &ticket.column_id,
+            &position,
+            &ticket.priority.as_ref().map(|p| p.as_str()),
+            &ticket.effort.as_ref().map(|e| e.as_str()),
+            &due_date.map(|d| d.to_rfc3339()),
+            &now.to_rfc3339(),
+            &now.to_rfc3339(),
+        ),
+    )
+    .map_err(AppError::from)?;
+
+    // Add labels if provided
+    if let Some(label_ids) = &ticket.labels {
+        for label_id in label_ids {
+            tx.execute(
+                "INSERT INTO ticket_labels (ticket_id, label_id) VALUES (?1, ?2)",
+                (&id, label_id),
+            )
+            .map_err(AppError::from)?;
+        }
+    }
+
+    tx.commit().map_err(AppError::from)?;
+
+    // Fetch and return complete ticket
+    get_ticket(db, id)
+}
+
+#[tauri::command]
+pub fn update_ticket(
+    db: State<Database>,
+    id: String,
+    updates: UpdateTicket,
+) -> Result<Ticket, String> {
+    let conn = db.connection();
+    let mut conn = conn.lock().unwrap();
+
+    // Check if ticket exists
+    let exists: bool = conn
+        .query_row("SELECT 1 FROM tickets WHERE id = ?1", [&id], |_| Ok(true))
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !exists {
+        return Err(AppError::NotFound(format!("Ticket {} not found", id)).into());
+    }
+
+    let tx = conn.savepoint().map_err(AppError::from)?;
+
+    // Build dynamic UPDATE query
+    let mut query = String::from("UPDATE tickets SET ");
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    let mut updates_applied = false;
+
+    if let Some(title) = &updates.title {
+        query.push_str("title = ?, ");
+        params.push(Box::new(title.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(description) = &updates.description {
+        query.push_str("description = ?, ");
+        params.push(Box::new(description.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(column_id) = &updates.column_id {
+        query.push_str("column_id = ?, ");
+        params.push(Box::new(column_id.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(position) = updates.position {
+        query.push_str("position = ?, ");
+        params.push(Box::new(position));
+        updates_applied = true;
+    }
+
+    if let Some(priority) = &updates.priority {
+        query.push_str("priority = ?, ");
+        params.push(Box::new(priority.as_str().to_string()));
+        updates_applied = true;
+    }
+
+    if let Some(effort) = &updates.effort {
+        query.push_str("effort = ?, ");
+        params.push(Box::new(effort.as_str().to_string()));
+        updates_applied = true;
+    }
+
+    if let Some(due_date_str) = &updates.due_date {
+        let due_date = if due_date_str.is_empty() || due_date_str == "null" {
+            None
+        } else {
+            DateTime::parse_from_rfc3339(due_date_str)
+                .ok()
+                .map(|d| d.with_timezone(&Utc).to_rfc3339())
+        };
+        query.push_str("due_date = ?, ");
+        params.push(Box::new(due_date));
+        updates_applied = true;
+    }
+
+    if updates_applied {
+        // Remove trailing comma and space
+        query.truncate(query.len() - 2);
+        query.push_str(" WHERE id = ?");
+        params.push(Box::new(id.clone()));
+
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        tx.execute(&query, param_refs.as_slice())
+            .map_err(AppError::from)?;
+    }
+
+    // Update labels if provided
+    if let Some(label_ids) = &updates.labels {
+        // Remove existing labels
+        tx.execute("DELETE FROM ticket_labels WHERE ticket_id = ?1", [&id])
+            .map_err(AppError::from)?;
+
+        // Add new labels
+        for label_id in label_ids {
+            tx.execute(
+                "INSERT INTO ticket_labels (ticket_id, label_id) VALUES (?1, ?2)",
+                (&id, label_id),
+            )
+            .map_err(AppError::from)?;
+        }
+    }
+
+    tx.commit().map_err(AppError::from)?;
+
+    // Fetch and return updated ticket
+    drop(conn); // Release lock before calling get_ticket
+    get_ticket(db, id)
+}
+
+#[tauri::command]
+pub fn delete_ticket(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let deleted = conn
+        .execute("DELETE FROM tickets WHERE id = ?1", [&id])
+        .map_err(AppError::from)?;
+
+    if deleted == 0 {
+        return Err(AppError::NotFound(format!("Ticket {} not found", id)).into());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn move_ticket(
+    db: State<Database>,
+    id: String,
+    column_id: String,
+    position: i32,
+) -> Result<Ticket, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Verify column exists
+    let column_exists: bool = conn
+        .query_row("SELECT 1 FROM columns WHERE id = ?1", [&column_id], |_| {
+            Ok(true)
+        })
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !column_exists {
+        return Err(AppError::NotFound(format!("Column {} not found", column_id)).into());
+    }
+
+    conn.execute(
+        "UPDATE tickets SET column_id = ?1, position = ?2 WHERE id = ?3",
+        (&column_id, &position, &id),
+    )
+    .map_err(AppError::from)?;
+
+    drop(conn);
+    get_ticket(db, id)
+}
+
+// ===========================================
+// LABEL COMMANDS
+// ===========================================
+
+#[tauri::command]
+pub fn get_labels(db: State<Database>) -> Result<Vec<Label>, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let mut stmt = conn
+        .prepare("SELECT id, name, color FROM labels ORDER BY name ASC")
+        .map_err(AppError::from)?;
+
+    let labels = stmt
+        .query_map([], |row| {
+            Ok(Label {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+            })
+        })
+        .map_err(AppError::from)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+
+    Ok(labels)
+}
+
+#[tauri::command]
+pub fn create_label(db: State<Database>, label: CreateLabel) -> Result<Label, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let id = uuid::Uuid::new_v4().to_string();
+
+    conn.execute(
+        "INSERT INTO labels (id, name, color) VALUES (?1, ?2, ?3)",
+        (&id, &label.name, &label.color),
+    )
+    .map_err(|e| {
+        if e.to_string().contains("UNIQUE") {
+            AppError::InvalidInput(format!("Label '{}' already exists", label.name))
+        } else {
+            AppError::from(e)
+        }
+    })?;
+
+    Ok(Label {
+        id,
+        name: label.name,
+        color: label.color,
+    })
+}
+
+#[tauri::command]
+pub fn update_label(
+    db: State<Database>,
+    id: String,
+    updates: UpdateLabel,
+) -> Result<Label, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Check if label exists
+    let exists: bool = conn
+        .query_row("SELECT 1 FROM labels WHERE id = ?1", [&id], |_| Ok(true))
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !exists {
+        return Err(AppError::NotFound(format!("Label {} not found", id)).into());
+    }
+
+    // Build dynamic UPDATE query
+    let mut query = String::from("UPDATE labels SET ");
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    let mut updates_applied = false;
+
+    if let Some(name) = &updates.name {
+        query.push_str("name = ?, ");
+        params.push(Box::new(name.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(color) = &updates.color {
+        query.push_str("color = ?, ");
+        params.push(Box::new(color.clone()));
+        updates_applied = true;
+    }
+
+    if !updates_applied {
+        return Err(AppError::InvalidInput("No updates provided".to_string()).into());
+    }
+
+    query.truncate(query.len() - 2);
+    query.push_str(" WHERE id = ?");
+    params.push(Box::new(id.clone()));
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    conn.execute(&query, param_refs.as_slice())
+        .map_err(AppError::from)?;
+
+    // Fetch and return updated label
+    let label = conn
+        .query_row(
+            "SELECT id, name, color FROM labels WHERE id = ?1",
+            [&id],
+            |row| {
+                Ok(Label {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                })
+            },
+        )
+        .map_err(AppError::from)?;
+
+    Ok(label)
+}
+
+#[tauri::command]
+pub fn delete_label(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let deleted = conn
+        .execute("DELETE FROM labels WHERE id = ?1", [&id])
+        .map_err(AppError::from)?;
+
+    if deleted == 0 {
+        return Err(AppError::NotFound(format!("Label {} not found", id)).into());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn add_label_to_ticket(
+    db: State<Database>,
+    ticket_id: String,
+    label_id: String,
+) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    conn.execute(
+        "INSERT INTO ticket_labels (ticket_id, label_id) VALUES (?1, ?2)",
+        (&ticket_id, &label_id),
+    )
+    .map_err(|e| {
+        if e.to_string().contains("UNIQUE") || e.to_string().contains("PRIMARY") {
+            AppError::InvalidInput("Label already added to ticket".to_string())
+        } else {
+            AppError::from(e)
+        }
+    })?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_label_from_ticket(
+    db: State<Database>,
+    ticket_id: String,
+    label_id: String,
+) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let deleted = conn
+        .execute(
+            "DELETE FROM ticket_labels WHERE ticket_id = ?1 AND label_id = ?2",
+            (&ticket_id, &label_id),
+        )
+        .map_err(AppError::from)?;
+
+    if deleted == 0 {
+        return Err(AppError::NotFound("Label not found on ticket".to_string()).into());
+    }
+
+    Ok(())
+}
+
+// ===========================================
+// HELPER FUNCTIONS
+// ===========================================
+
+fn parse_ticket_row(row: &rusqlite::Row) -> rusqlite::Result<Ticket> {
+    let priority_str: Option<String> = row.get(5)?;
+    let effort_str: Option<String> = row.get(6)?;
+    let due_date_str: Option<String> = row.get(7)?;
+    let created_at_str: String = row.get(8)?;
+    let updated_at_str: String = row.get(9)?;
+
+    Ok(Ticket {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        description: row.get(2)?,
+        column_id: row.get(3)?,
+        position: row.get(4)?,
+        priority: priority_str.and_then(|s| Priority::from_str(&s)),
+        effort: effort_str.and_then(|s| Effort::from_str(&s)),
+        due_date: due_date_str.and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+            .map(|d| d.with_timezone(&Utc)),
+        labels: Vec::new(), // Loaded separately
+        comments: Vec::new(), // Loaded separately
+        created_at: DateTime::parse_from_rfc3339(&created_at_str)
+            .unwrap()
+            .with_timezone(&Utc),
+        updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+            .unwrap()
+            .with_timezone(&Utc),
+    })
+}
+
+fn get_ticket_labels(
+    conn: &rusqlite::Connection,
+    ticket_id: &str,
+) -> Result<Vec<Label>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT l.id, l.name, l.color
+         FROM labels l
+         INNER JOIN ticket_labels tl ON l.id = tl.label_id
+         WHERE tl.ticket_id = ?1
+         ORDER BY l.name ASC",
+    )?;
+
+    let labels = stmt
+        .query_map([ticket_id], |row| {
+            Ok(Label {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(labels)
+}
+
+fn get_ticket_comments(
+    conn: &rusqlite::Connection,
+    ticket_id: &str,
+) -> Result<Vec<Comment>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, ticket_id, content, created_at
+         FROM comments
+         WHERE ticket_id = ?1
+         ORDER BY created_at ASC",
+    )?;
+
+    let comments = stmt
+        .query_map([ticket_id], |row| {
+            let created_at_str: String = row.get(3)?;
+            Ok(Comment {
+                id: row.get(0)?,
+                ticket_id: row.get(1)?,
+                content: row.get(2)?,
+                created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                    .unwrap()
+                    .with_timezone(&Utc),
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(comments)
+}

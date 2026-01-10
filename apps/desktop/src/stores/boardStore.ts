@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Ticket, Column, Label, TicketCreate, TicketUpdate, ColumnCreate } from '@/types';
+import { api } from '@/lib/tauri';
 
 // ===========================================
 // BOARD STORE
@@ -27,14 +28,14 @@ interface BoardState {
   addColumn: (column: ColumnCreate) => Promise<void>;
   updateColumn: (id: string, updates: Partial<Column>) => Promise<void>;
   deleteColumn: (id: string) => Promise<void>;
-  reorderColumns: (columnIds: string[]) => void;
+  reorderColumns: (columnIds: string[]) => Promise<void>;
 
   // Actions - Tickets
   setTickets: (columnId: string, tickets: Ticket[]) => void;
   addTicket: (ticket: TicketCreate) => Promise<Ticket>;
   updateTicket: (id: string, updates: TicketUpdate) => Promise<void>;
   deleteTicket: (id: string) => Promise<void>;
-  moveTicket: (params: { ticketId: string; targetColumnId: string; position: number }) => void;
+  moveTicket: (params: { ticketId: string; targetColumnId: string; position: number }) => Promise<void>;
 
   // Actions - Labels
   setLabels: (labels: Label[]) => void;
@@ -63,25 +64,37 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
   },
 
   addColumn: async (column) => {
-    const newColumn: Column = {
-      id: crypto.randomUUID(),
-      name: column.name,
-      position: get().columns.length,
-      color: column.color,
-      wipLimit: column.wipLimit,
-    };
+    const prevColumns = get().columns;
+    const prevBoard = get().board;
 
-    set((state) => ({
-      columns: [...state.columns, newColumn],
-      board: state.board ? {
-        ...state.board,
-        columns: [...state.board.columns, newColumn],
-      } : null,
-      tickets: { ...state.tickets, [newColumn.id]: [] },
-    }));
+    try {
+      // Call backend
+      const newColumn = await api.columns.createColumn(column);
+
+      set((state) => ({
+        columns: [...state.columns, newColumn],
+        board: state.board ? {
+          ...state.board,
+          columns: [...state.board.columns, newColumn],
+        } : null,
+        tickets: { ...state.tickets, [newColumn.id]: [] },
+      }));
+    } catch (error) {
+      // Rollback on error
+      set({
+        columns: prevColumns,
+        board: prevBoard,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
   updateColumn: async (id, updates) => {
+    const prevColumns = get().columns;
+    const prevBoard = get().board;
+
+    // Optimistic update
     set((state) => ({
       columns: state.columns.map((c) =>
         c.id === id ? { ...c, ...updates } : c
@@ -93,9 +106,26 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         ),
       } : null,
     }));
+
+    try {
+      await api.columns.updateColumn(id, updates);
+    } catch (error) {
+      // Rollback on error
+      set({
+        columns: prevColumns,
+        board: prevBoard,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
   deleteColumn: async (id) => {
+    const prevColumns = get().columns;
+    const prevBoard = get().board;
+    const prevTickets = get().tickets;
+
+    // Optimistic update
     set((state) => {
       const newTickets = { ...state.tickets };
       delete newTickets[id];
@@ -108,9 +138,25 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         tickets: newTickets,
       };
     });
+
+    try {
+      await api.columns.deleteColumn(id);
+    } catch (error) {
+      // Rollback on error
+      set({
+        columns: prevColumns,
+        board: prevBoard,
+        tickets: prevTickets,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
-  reorderColumns: (columnIds) => {
+  reorderColumns: async (columnIds) => {
+    const prevColumns = get().columns;
+
+    // Optimistic update
     set((state) => {
       const newColumns = columnIds.map((id, index) => {
         const column = state.columns.find((c) => c.id === id)!;
@@ -121,6 +167,17 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         board: state.board ? { ...state.board, columns: newColumns } : null,
       };
     });
+
+    try {
+      await api.columns.reorderColumns(columnIds);
+    } catch (error) {
+      // Rollback on error
+      set({
+        columns: prevColumns,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
   // ===========================================
@@ -134,34 +191,41 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
   },
 
   addTicket: async (ticketData) => {
-    const columnTickets = get().tickets[ticketData.columnId] || [];
+    try {
+      // Call backend - it generates ID and timestamps
+      const newTicket = await api.tickets.createTicket(ticketData);
 
-    const newTicket: Ticket = {
-      id: crypto.randomUUID(),
-      title: ticketData.title,
-      description: ticketData.description,
-      priority: ticketData.priority,
-      effort: ticketData.effort,
-      columnId: ticketData.columnId,
-      position: columnTickets.length,
-      labels: [],
-      comments: [],
-      dueDate: ticketData.dueDate,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      set((state) => ({
+        tickets: {
+          ...state.tickets,
+          [ticketData.columnId]: [...(state.tickets[ticketData.columnId] || []), newTicket],
+        },
+      }));
 
-    set((state) => ({
-      tickets: {
-        ...state.tickets,
-        [ticketData.columnId]: [...(state.tickets[ticketData.columnId] || []), newTicket],
-      },
-    }));
-
-    return newTicket;
+      return newTicket;
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
   },
 
   updateTicket: async (id, updates) => {
+    const prevTickets = get().tickets;
+
+    // Find current ticket to get columnId
+    let ticketColumnId: string | undefined;
+    for (const [columnId, columnTickets] of Object.entries(get().tickets)) {
+      if (columnTickets.some(t => t.id === id)) {
+        ticketColumnId = columnId;
+        break;
+      }
+    }
+
+    if (!ticketColumnId) {
+      throw new Error(`Ticket ${id} not found`);
+    }
+
+    // Optimistic update
     set((state) => {
       const newTickets = { ...state.tickets };
       for (const columnId of Object.keys(newTickets)) {
@@ -182,15 +246,40 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
             ...rest,
             labels: updatedLabels,
             dueDate: updatedDueDate,
-            updatedAt: new Date().toISOString(),
           };
         });
       }
       return { tickets: newTickets };
     });
+
+    try {
+      // Call backend
+      const updatedTicket = await api.tickets.updateTicket(id, updates);
+
+      // Sync with backend response
+      set((state) => {
+        const newTickets = { ...state.tickets };
+        for (const columnId of Object.keys(newTickets)) {
+          newTickets[columnId] = newTickets[columnId].map((t) =>
+            t.id === id ? updatedTicket : t
+          );
+        }
+        return { tickets: newTickets };
+      });
+    } catch (error) {
+      // Rollback on error
+      set({
+        tickets: prevTickets,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
   deleteTicket: async (id) => {
+    const prevTickets = get().tickets;
+
+    // Optimistic update
     set((state) => {
       const newTickets = { ...state.tickets };
       for (const columnId of Object.keys(newTickets)) {
@@ -198,9 +287,23 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       }
       return { tickets: newTickets };
     });
+
+    try {
+      await api.tickets.deleteTicket(id);
+    } catch (error) {
+      // Rollback on error
+      set({
+        tickets: prevTickets,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
-  moveTicket: ({ ticketId, targetColumnId, position }) => {
+  moveTicket: async ({ ticketId, targetColumnId, position }) => {
+    const prevTickets = get().tickets;
+
+    // Optimistic update
     set((state) => {
       const newTickets = { ...state.tickets };
       let movedTicket: Ticket | undefined;
@@ -221,7 +324,6 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
           ...movedTicket,
           columnId: targetColumnId,
           position,
-          updatedAt: new Date().toISOString(),
         };
 
         const targetTickets = [...(newTickets[targetColumnId] || [])];
@@ -231,6 +333,17 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
 
       return { tickets: newTickets };
     });
+
+    try {
+      await api.tickets.moveTicket(ticketId, targetColumnId, position);
+    } catch (error) {
+      // Rollback on error
+      set({
+        tickets: prevTickets,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
   // ===========================================
@@ -242,20 +355,25 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
   },
 
   addLabel: async (name, color) => {
-    const newLabel: Label = {
-      id: crypto.randomUUID(),
-      name,
-      color,
-    };
+    try {
+      const newLabel = await api.labels.createLabel({ name, color });
 
-    set((state) => ({
-      labels: [...state.labels, newLabel],
-    }));
+      set((state) => ({
+        labels: [...state.labels, newLabel],
+      }));
 
-    return newLabel;
+      return newLabel;
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
   },
 
   deleteLabel: async (id) => {
+    const prevLabels = get().labels;
+    const prevTickets = get().tickets;
+
+    // Optimistic update
     set((state) => {
       const newTickets = { ...state.tickets };
       for (const columnId of Object.keys(newTickets)) {
@@ -269,6 +387,18 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         tickets: newTickets,
       };
     });
+
+    try {
+      await api.labels.deleteLabel(id);
+    } catch (error) {
+      // Rollback on error
+      set({
+        labels: prevLabels,
+        tickets: prevTickets,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   },
 
   // ===========================================
@@ -279,80 +409,39 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      // Demo data for now
-      const columns: Column[] = [
-        { id: '1', name: 'Backlog', position: 0, color: '#71717a' },
-        { id: '2', name: 'To Do', position: 1, color: '#3b82f6' },
-        { id: '3', name: 'In Progress', position: 2, color: '#eab308' },
-        { id: '4', name: 'Review', position: 3, color: '#a855f7' },
-        { id: '5', name: 'Done', position: 4, color: '#22c55e' },
-      ];
+      // Initialize default board
+      const boardId = await api.board.getDefaultBoard();
 
-      const labels: Label[] = [
-        { id: 'l1', name: 'bug', color: '#ef4444' },
-        { id: 'l2', name: 'feature', color: '#6366f1' },
-        { id: 'l3', name: 'improvement', color: '#22c55e' },
-        { id: 'l4', name: 'ui', color: '#f97316' },
-        { id: 'l5', name: 'backend', color: '#a855f7' },
-      ];
+      // Load all data in parallel
+      const [columns, labels, tickets] = await Promise.all([
+        api.columns.getColumns(),
+        api.labels.getLabels(),
+        api.tickets.getTickets(),
+      ]);
 
-      // Demo tickets
-      const demoTickets: Record<string, Ticket[]> = {
-        '1': [
-          {
-            id: 't1',
-            title: 'Research AI providers',
-            description: 'Compare Claude, GPT-4, and local models',
-            priority: 'medium',
-            effort: 'm',
-            columnId: '1',
-            position: 0,
-            labels: [labels[1]],
-            comments: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        '2': [
-          {
-            id: 't2',
-            title: 'Setup Tauri backend',
-            description: 'Initialize Rust backend with SQLite',
-            priority: 'high',
-            effort: 'l',
-            columnId: '2',
-            position: 0,
-            labels: [labels[4]],
-            comments: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        '3': [
-          {
-            id: 't3',
-            title: 'Build KanbanBoard component',
-            priority: 'critical',
-            effort: 'm',
-            columnId: '3',
-            position: 0,
-            labels: [labels[1], labels[3]],
-            comments: [],
-            dueDate: new Date(Date.now() + 86400000).toISOString(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        '4': [],
-        '5': [],
-      };
+      // Group tickets by column
+      const ticketsByColumn: Record<string, Ticket[]> = {};
+      for (const column of columns) {
+        ticketsByColumn[column.id] = [];
+      }
+      for (const ticket of tickets) {
+        if (!ticketsByColumn[ticket.columnId]) {
+          ticketsByColumn[ticket.columnId] = [];
+        }
+        ticketsByColumn[ticket.columnId].push(ticket);
+      }
+
+      // Sort tickets by position within each column
+      for (const columnId of Object.keys(ticketsByColumn)) {
+        ticketsByColumn[columnId].sort((a, b) => a.position - b.position);
+      }
 
       set({
         columns,
         labels,
-        tickets: demoTickets,
+        tickets: ticketsByColumn,
         board: {
-          id: 'default',
+          id: boardId,
           name: 'Kanban AI',
           columns,
         },
@@ -360,7 +449,7 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to load board',
+        error: error instanceof Error ? error.message : String(error),
         isLoading: false,
       });
     }

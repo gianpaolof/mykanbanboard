@@ -1,10 +1,10 @@
-# 📋 Kanban AI - Task List
+# Kanban AI - Task List
 
 > Usa questa lista per tracciare il progresso. Ogni task ha un prompt per Claude Code.
 
 ---
 
-## 🎯 Phase 1: Foundation (MVP)
+## Phase 1: Foundation (MVP)
 
 ### 1.1 Setup & Infrastructure
 
@@ -30,42 +30,49 @@
 
 ### 1.2 Database (Rust)
 
-- [ ] **TASK-005**: Creare schema SQLite
+- [x] **TASK-005**: Creare schema SQLite
   ```
   Prompt: "Crea il modulo db.rs in src-tauri/src/ con lo schema SQLite per boards, columns, tickets, labels, comments. Usa rusqlite. Implementa le migrations."
   ```
+  > Completato: Schema SQLite in `src-tauri/src/db/schema.sql` con 5 tabelle, 11 indici, constraints e triggers.
 
-- [ ] **TASK-006**: Implementare models Rust
+- [x] **TASK-006**: Implementare models Rust
   ```
   Prompt: "Crea models.rs con le struct Rust: Board, Column, Ticket, Label, Comment. Deriva Serialize, Deserialize. Aggiungi i tipi enum Priority e Effort."
   ```
+  > Completato: `src-tauri/src/models.rs` con tutti i models, enums Priority/Effort, e DTOs per create/update.
 
-- [ ] **TASK-007**: Implementare error handling
+- [x] **TASK-007**: Implementare error handling
   ```
   Prompt: "Crea error.rs con AppError enum usando thiserror. Implementa From<rusqlite::Error> e la conversione a tauri::InvokeError."
   ```
+  > Completato: `src-tauri/src/error.rs` con AppError enum e conversioni.
 
 ### 1.3 Tauri Commands (Rust)
 
-- [ ] **TASK-008**: CRUD Boards
+- [x] **TASK-008**: CRUD Boards
   ```
   Prompt: "Crea i Tauri commands in commands.rs: get_board, get_default_board, create_board, update_board. Usa State<Database> per accedere al db."
   ```
+  > Completato: `get_default_board` command che crea board e 5 colonne default se non esistono.
 
-- [ ] **TASK-009**: CRUD Columns
+- [x] **TASK-009**: CRUD Columns
   ```
   Prompt: "Aggiungi i commands: get_columns, create_column, update_column, delete_column, reorder_columns. Gestisci il position field per l'ordinamento."
   ```
+  > Completato: 5 commands per columns con position management.
 
-- [ ] **TASK-010**: CRUD Tickets
+- [x] **TASK-010**: CRUD Tickets
   ```
   Prompt: "Aggiungi i commands: get_tickets, create_ticket, update_ticket, delete_ticket, move_ticket. Il move_ticket deve aggiornare column_id e position."
   ```
+  > Completato: 6 commands per tickets con labels e comments eager loading.
 
-- [ ] **TASK-011**: CRUD Labels
+- [x] **TASK-011**: CRUD Labels
   ```
   Prompt: "Aggiungi i commands: get_labels, create_label, update_label, delete_label, add_label_to_ticket, remove_label_from_ticket."
   ```
+  > Completato: 6 commands per labels con junction table management.
 
 ### 1.4 React Components (UI)
 
@@ -111,7 +118,7 @@
 
 - [ ] **TASK-020**: Creare Header component
   ```
-  Prompt: "Crea components/layout/Header.tsx. Board title, search bar con shortcut ⌘K, view toggle (Board/List/Timeline), AI button, settings button."
+  Prompt: "Crea components/layout/Header.tsx. Board title, search bar con shortcut Cmd+K, view toggle (Board/List/Timeline), AI button, settings button."
   ```
 
 - [ ] **TASK-021**: Creare CommandPalette component
@@ -121,15 +128,16 @@
 
 - [ ] **TASK-022**: Assemblare App.tsx
   ```
-  Prompt: "Crea App.tsx che assembla: Sidebar, Header, KanbanBoard. Carica il board all'avvio con useEffect. Gestisci il CommandPalette con ⌘K. Aggiungi il layout base con flex."
+  Prompt: "Crea App.tsx che assembla: Sidebar, Header, KanbanBoard. Carica il board all'avvio con useEffect. Gestisci il CommandPalette con Cmd+K. Aggiungi il layout base con flex."
   ```
 
 ### 1.5 Integrazione
 
-- [ ] **TASK-023**: Collegare frontend a backend
+- [x] **TASK-023**: Collegare frontend a backend
   ```
   Prompt: "Aggiorna boardStore per usare invoke() di @tauri-apps/api/core. Testa create, read, update, delete ticket. Verifica che il drag & drop persista i cambiamenti."
   ```
+  > Completato: `src/lib/tauri.ts` API wrapper + `stores/boardStore.ts` aggiornato con invoke(), optimistic updates, e rollback on error.
 
 - [ ] **TASK-024**: Testare MVP
   ```
@@ -138,46 +146,53 @@
 
 ---
 
-## 🤖 Phase 2: AI Agent
+## Phase 2: AI Agent
 
 ### 2.1 Python Setup
 
-- [ ] **TASK-025**: Inizializzare Python project
+- [x] **TASK-025**: Inizializzare Python project
   ```
   Prompt: "Inizializza services/agent con pyproject.toml (uv). Dipendenze: fastapi, uvicorn, dspy-ai, chromadb, anthropic, pydantic-settings. Crea struttura cartelle."
   ```
+  > Completato: `services/agent/pyproject.toml` con tutte le dipendenze, struttura cartelle, Makefile, start.sh.
 
-- [ ] **TASK-026**: Creare config.py
+- [x] **TASK-026**: Creare config.py
   ```
   Prompt: "Crea src/config.py con pydantic-settings. Campi: anthropic_api_key, openai_api_key (optional), default_model, chroma_path, port. Leggi da .env."
   ```
+  > Completato: `services/agent/src/config.py` con Settings class e validazione.
 
-- [ ] **TASK-027**: Setup DSPy con Claude
+- [x] **TASK-027**: Setup DSPy con Claude
   ```
   Prompt: "Crea src/main.py con FastAPI. Setup DSPy con Claude come LM. Funzione setup_dspy() chiamata all'avvio. Endpoint /health per verificare."
   ```
+  > Completato: `services/agent/src/main.py` con FastAPI, lifespan, CORS, DSPy setup.
 
 ### 2.2 DSPy Modules
 
-- [ ] **TASK-028**: Creare TriageModule
+- [x] **TASK-028**: Creare TriageModule
   ```
   Prompt: "Crea agent/modules.py con TriageModule. Signature TriageTicket con input (title, description, existing_labels) e output (priority, labels, effort, reasoning). Usa ChainOfThought."
   ```
+  > Completato: `services/agent/src/agent/modules.py` con TriageModule e TriageTicket signature.
 
-- [ ] **TASK-029**: Creare DecomposeModule
+- [x] **TASK-029**: Creare DecomposeModule
   ```
   Prompt: "Aggiungi DecomposeModule. Input: title, description. Output: subtasks (list of {title, description, effort}), dependencies (list of tuples). Max 7 subtasks."
   ```
+  > Completato: DecomposeModule con DecomposeTask signature.
 
-- [ ] **TASK-030**: Creare DailySummaryModule
+- [x] **TASK-030**: Creare DailySummaryModule
   ```
   Prompt: "Aggiungi DailySummaryModule. Input: in_progress, blocked, due_soon tickets. Output: greeting, focus_today (top 3), blockers, quick_wins."
   ```
+  > Completato: DailySummaryModule con DailySummary signature.
 
-- [ ] **TASK-031**: Creare ChatModule
+- [x] **TASK-031**: Creare ChatModule
   ```
   Prompt: "Aggiungi ChatModule (ActionDecider). Input: message, context. Output: action (create/update/move/search/summarize/none), params, response."
   ```
+  > Completato: ActionDeciderModule con ActionDecider signature.
 
 ### 2.3 API Endpoints
 
@@ -242,7 +257,7 @@
 
 ---
 
-## ✨ Phase 3: Polish
+## Phase 3: Polish
 
 - [ ] **TASK-043**: Animazioni polish
 - [ ] **TASK-044**: Keyboard shortcuts completi
@@ -255,37 +270,37 @@
 
 ---
 
-## 📊 Progress Tracker
+## Progress Tracker
 
 | Phase | Total | Done | Progress |
 |-------|-------|------|----------|
-| 1. Foundation | 24 | 0 | 0% |
-| 2. AI Agent | 18 | 0 | 0% |
+| 1. Foundation | 24 | 8 | 33% |
+| 2. AI Agent | 18 | 7 | 39% |
 | 3. Polish | 8 | 0 | 0% |
-| **Total** | **50** | **0** | **0%** |
+| **Total** | **50** | **15** | **30%** |
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Primo Sprint (Week 1)
 Focus: Setup + Database + UI Base
 
-1. TASK-001 → TASK-004 (Setup)
-2. TASK-005 → TASK-007 (Database)
-3. TASK-012 → TASK-014 (Utils, Types, Store)
-4. TASK-015 → TASK-017 (Core components)
+1. TASK-001 - TASK-004 (Setup)
+2. TASK-005 - TASK-007 (Database) **DONE**
+3. TASK-012 - TASK-014 (Utils, Types, Store)
+4. TASK-015 - TASK-017 (Core components)
 
 ### Secondo Sprint (Week 2)
 Focus: CRUD completo + Integrazione
 
-1. TASK-008 → TASK-011 (Tauri commands)
-2. TASK-018 → TASK-022 (UI components)
-3. TASK-023 → TASK-024 (Integrazione)
+1. TASK-008 - TASK-011 (Tauri commands) **DONE**
+2. TASK-018 - TASK-022 (UI components)
+3. TASK-023 - TASK-024 (Integrazione) **TASK-023 DONE**
 
 ### Terzo Sprint (Week 3)
 Focus: AI Agent
 
-1. TASK-025 → TASK-031 (Python + DSPy)
-2. TASK-032 → TASK-037 (API endpoints)
-3. TASK-038 → TASK-042 (Integrazione UI)
+1. TASK-025 - TASK-031 (Python + DSPy) **DONE**
+2. TASK-032 - TASK-037 (API endpoints)
+3. TASK-038 - TASK-042 (Integrazione UI)
