@@ -169,6 +169,18 @@
 - [ ] **TASK-049**: Multiple boards
 - [ ] **TASK-050**: Export/Import
 
+### 3.2 Performance & Stability
+
+- [ ] **TASK-051**: Debug & Fix Freezing
+  ```
+  Prompt: "Investiga e risolvi i freezing dell'app: aggiungi timeout 30s alle chiamate agent, gestisci errori di rete con retry, migliora indicatori loading, logga performance chiamate API."
+  ```
+
+- [ ] **TASK-052**: Performance Optimization
+  ```
+  Prompt: "Ottimizza performance React: React.memo sui componenti pesanti (TicketCard, KanbanColumn), useMemo/useCallback dove serve, virtualizzazione liste >50 ticket, debounce su input."
+  ```
+
 ---
 
 ## Progress Tracker
@@ -177,8 +189,8 @@
 |-------|-------|------|----------|
 | 1. Foundation | 24 | 24 | 100% |
 | 2. AI Agent | 18 | 18 | 100% |
-| 3. Polish | 8 | 0 | 0% |
-| **Total** | **50** | **42** | **84%** |
+| 3. Polish | 10 | 0 | 0% |
+| **Total** | **52** | **42** | **81%** |
 
 ---
 
