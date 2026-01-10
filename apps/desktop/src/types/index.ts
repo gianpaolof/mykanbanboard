@@ -1,0 +1,173 @@
+// Tipi base per Kanban AI
+
+// ===========================================
+// TICKET
+// ===========================================
+
+export type Priority = 'low' | 'medium' | 'high' | 'critical';
+export type Effort = 'xs' | 's' | 'm' | 'l' | 'xl';
+
+export interface Ticket {
+  id: string;
+  title: string;
+  description?: string;
+  priority?: Priority;
+  effort?: Effort;
+  columnId: string;
+  position: number;
+  labels: Label[];
+  dueDate?: string; // ISO date string
+  comments: Comment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketCreate {
+  title: string;
+  description?: string;
+  columnId: string;
+  priority?: Priority;
+  effort?: Effort;
+  labels?: string[]; // label IDs
+  dueDate?: string;
+}
+
+export interface TicketUpdate {
+  title?: string;
+  description?: string;
+  priority?: Priority;
+  effort?: Effort;
+  columnId?: string;
+  position?: number;
+  labels?: string[];
+  dueDate?: string | null;
+}
+
+// ===========================================
+// COLUMN
+// ===========================================
+
+export interface Column {
+  id: string;
+  name: string;
+  position: number;
+  color?: string;
+  wipLimit?: number;
+}
+
+export interface ColumnCreate {
+  name: string;
+  color?: string;
+  wipLimit?: number;
+}
+
+// ===========================================
+// LABEL
+// ===========================================
+
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface LabelCreate {
+  name: string;
+  color: string;
+}
+
+// ===========================================
+// COMMENT
+// ===========================================
+
+export interface Comment {
+  id: string;
+  ticketId: string;
+  content: string;
+  createdAt: string;
+}
+
+// ===========================================
+// BOARD
+// ===========================================
+
+export interface Board {
+  id: string;
+  name: string;
+  columns: Column[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ===========================================
+// AI AGENT
+// ===========================================
+
+export interface TriageResult {
+  priority: Priority;
+  labels: string[];
+  effort: Effort;
+  reasoning: string;
+}
+
+export interface DecomposeResult {
+  subtasks: {
+    title: string;
+    description: string;
+    effort: Effort;
+  }[];
+  dependencies: [number, number][]; // [from, to]
+}
+
+export interface DailySummary {
+  greeting: string;
+  focusToday: {
+    ticketId: string;
+    title: string;
+    priority: Priority;
+    reason: string;
+  }[];
+  blockers: string[];
+  quickWins: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  action?: {
+    type: string;
+    params: Record<string, unknown>;
+  };
+}
+
+// ===========================================
+// UI STATE
+// ===========================================
+
+export type ViewMode = 'board' | 'list' | 'timeline';
+
+export interface ModalState {
+  isOpen: boolean;
+  ticketId?: string;
+}
+
+// ===========================================
+// UTILITY TYPES
+// ===========================================
+
+export type SortDirection = 'asc' | 'desc';
+
+export interface SortConfig {
+  field: keyof Ticket;
+  direction: SortDirection;
+}
+
+export interface FilterConfig {
+  priority?: Priority[];
+  labels?: string[];
+  search?: string;
+  dueBefore?: string;
+  dueAfter?: string;
+}

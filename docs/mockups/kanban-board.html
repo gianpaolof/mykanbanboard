@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kanban AI - Interactive Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #09090b;
+      --bg-secondary: #18181b;
+      --bg-tertiary: #27272a;
+      --bg-hover: rgba(255, 255, 255, 0.06);
+      --glass-bg: rgba(255, 255, 255, 0.04);
+      --glass-bg-hover: rgba(255, 255, 255, 0.07);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-border-hover: rgba(255, 255, 255, 0.12);
+      --glass-blur: 16px;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-tertiary: #71717a;
+      --text-muted: #52525b;
+      --accent-primary: #6366f1;
+      --accent-hover: #818cf8;
+      --accent-muted: rgba(99, 102, 241, 0.15);
+      --accent-glow: 0 0 30px rgba(99, 102, 241, 0.4);
+      --success: #22c55e;
+      --warning: #eab308;
+      --error: #ef4444;
+      --priority-critical: #ef4444;
+      --priority-high: #f97316;
+      --priority-medium: #eab308;
+      --priority-low: #22c55e;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.1);
+      --font-display: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      --font-body: 'Inter', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+      --space-6: 1.5rem; --space-8: 2rem;
+      --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px; --radius-xl: 12px; --radius-2xl: 16px;
+      --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.5);
+      --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.6);
+      --duration-fast: 100ms; --duration-normal: 200ms; --duration-slow: 300ms;
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --sidebar-width: 240px; --header-height: 52px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+    body { font-family: var(--font-body); background: var(--bg-primary); color: var(--text-primary); line-height: 1.5; min-height: 100vh; overflow: hidden; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
+    .app { display: flex; height: 100vh; overflow: hidden; }
+    .sidebar { width: var(--sidebar-width); background: var(--bg-secondary); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-header { padding: var(--space-4); border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: var(--space-3); }
+    .logo { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent-primary), #a855f7); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; box-shadow: var(--accent-glow); }
+    .logo svg { width: 18px; height: 18px; color: white; }
+    .workspace-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
+    .sidebar-nav { padding: var(--space-3); flex: 1; overflow-y: auto; }
+    .nav-section { margin-bottom: var(--space-4); }
+    .nav-section-title { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: var(--space-2) var(--space-3); }
+    .nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all var(--duration-fast) ease; text-decoration: none; }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-muted); color: var(--accent-hover); }
+    .nav-item svg { width: 16px; height: 16px; opacity: 0.7; }
+    .nav-item.active svg { opacity: 1; }
+    .nav-item .badge { margin-left: auto; font-size: 0.7rem; background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--text-tertiary); }
+    .label-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--text-secondary); font-size: 0.8rem; cursor: pointer; }
+    .label-item:hover { background: var(--bg-hover); }
+    .label-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .header { height: var(--header-height); border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; padding: 0 var(--space-4); gap: var(--space-4); background: var(--bg-secondary); }
+    .header-left { display: flex; align-items: center; gap: var(--space-3); }
+    .board-title { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; }
+    .board-meta { font-size: 0.8rem; color: var(--text-tertiary); }
+    .header-center { flex: 1; display: flex; justify-content: center; }
+    .search-bar { display: flex; align-items: center; gap: var(--space-2); background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-2) var(--space-3); width: 300px; }
+    .search-bar:focus-within { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-muted); }
+    .search-bar svg { width: 16px; height: 16px; color: var(--text-muted); }
+    .search-bar input { flex: 1; background: none; border: none; outline: none; color: var(--text-primary); font-size: 0.875rem; }
+    .search-bar input::placeholder { color: var(--text-muted); }
+    .search-bar kbd { font-family: var(--font-mono); font-size: 0.7rem; background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--text-tertiary); }
+    .header-right { display: flex; align-items: center; gap: var(--space-2); }
+    .view-toggle { display: flex; background: var(--bg-primary); border-radius: var(--radius-md); padding: 2px; border: 1px solid var(--border-subtle); }
+    .view-btn { display: flex; align-items: center; justify-content: center; width: 32px; height: 28px; border-radius: var(--radius-sm); border: none; background: none; color: var(--text-tertiary); cursor: pointer; }
+    .view-btn:hover { color: var(--text-secondary); }
+    .view-btn.active { background: var(--bg-tertiary); color: var(--text-primary); }
+    .view-btn svg { width: 16px; height: 16px; }
+    .icon-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-md); border: none; background: none; color: var(--text-secondary); cursor: pointer; }
+    .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .icon-btn.ai-btn { background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15)); border: 1px solid rgba(99, 102, 241, 0.3); color: var(--accent-hover); }
+    .icon-btn.ai-btn:hover { background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25)); box-shadow: var(--accent-glow); }
+    .board-container { flex: 1; overflow-x: auto; overflow-y: hidden; padding: var(--space-4); background: var(--bg-primary); }
+    .board { display: flex; gap: var(--space-4); height: 100%; min-width: min-content; }
+    .column { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; max-height: 100%; }
+    .column-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-1); margin-bottom: var(--space-3); }
+    .column-header-left { display: flex; align-items: center; gap: var(--space-2); }
+    .column-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .column-title { font-family: var(--font-display); font-weight: 600; font-size: 0.875rem; }
+    .column-count { font-size: 0.75rem; color: var(--text-tertiary); background: var(--bg-tertiary); padding: 2px 8px; border-radius: var(--radius-sm); }
+    .column-actions { display: flex; gap: var(--space-1); }
+    .column-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--radius-sm); border: none; background: none; color: var(--text-muted); cursor: pointer; opacity: 0; }
+    .column:hover .column-btn { opacity: 1; }
+    .column-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .column-btn svg { width: 14px; height: 14px; }
+    .column-cards { flex: 1; overflow-y: auto; padding-right: var(--space-1); }
+    .cards-list { display: flex; flex-direction: column; gap: var(--space-2); min-height: 100px; }
+    .ticket-card { background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); border-radius: var(--radius-xl); padding: var(--space-3); cursor: grab; transition: all var(--duration-normal) var(--ease-out-expo); animation: fadeInUp 0.3s var(--ease-out-expo) forwards; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .ticket-card:hover { background: var(--glass-bg-hover); border-color: var(--glass-border-hover); transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+    .ticket-card:active { cursor: grabbing; transform: scale(1.02); box-shadow: var(--shadow-xl); }
+    .ticket-card.dragging { opacity: 0.5; }
+    .ticket-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: var(--space-2); }
+    .ticket-priority { display: flex; align-items: center; gap: var(--space-2); }
+    .priority-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .priority-dot.critical { background: var(--priority-critical); box-shadow: 0 0 8px var(--priority-critical); }
+    .priority-dot.high { background: var(--priority-high); box-shadow: 0 0 8px var(--priority-high); }
+    .priority-dot.medium { background: var(--priority-medium); }
+    .priority-dot.low { background: var(--priority-low); }
+    .ticket-labels { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+    .ticket-label { font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: var(--radius-sm); text-transform: uppercase; letter-spacing: 0.03em; }
+    .ticket-label.red { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+    .ticket-label.blue { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+    .ticket-label.green { background: rgba(34, 197, 94, 0.15); color: #86efac; }
+    .ticket-label.yellow { background: rgba(234, 179, 8, 0.15); color: #fde047; }
+    .ticket-label.purple { background: rgba(168, 85, 247, 0.15); color: #d8b4fe; }
+    .ticket-title { font-family: var(--font-display); font-weight: 600; font-size: 0.9rem; line-height: 1.4; margin-bottom: var(--space-3); }
+    .ticket-footer { display: flex; align-items: center; justify-content: space-between; color: var(--text-tertiary); font-size: 0.75rem; }
+    .ticket-meta { display: flex; align-items: center; gap: var(--space-3); }
+    .ticket-meta-item { display: flex; align-items: center; gap: var(--space-1); }
+    .ticket-meta-item svg { width: 12px; height: 12px; }
+    .ticket-meta-item.overdue { color: var(--error); }
+    .ticket-effort { font-family: var(--font-mono); font-size: 0.7rem; background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--text-secondary); }
+    .add-card-btn { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle); background: transparent; color: var(--text-muted); font-size: 0.875rem; cursor: pointer; margin-top: var(--space-2); width: 100%; }
+    .add-card-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); background: var(--accent-muted); }
+    .add-card-btn svg { width: 16px; height: 16px; }
+    .command-palette-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); display: flex; align-items: flex-start; justify-content: center; padding-top: 15vh; z-index: 100; opacity: 0; visibility: hidden; transition: all var(--duration-normal) ease; }
+    .command-palette-overlay.active { opacity: 1; visibility: visible; }
+    .command-palette { width: 560px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); overflow: hidden; transform: scale(0.95) translateY(-10px); transition: all var(--duration-normal) var(--ease-out-expo); }
+    .command-palette-overlay.active .command-palette { transform: scale(1) translateY(0); }
+    .command-input-wrapper { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border-subtle); }
+    .command-input-wrapper svg { width: 20px; height: 20px; color: var(--text-muted); }
+    .command-input { flex: 1; background: none; border: none; outline: none; font-size: 1rem; color: var(--text-primary); }
+    .command-input::placeholder { color: var(--text-muted); }
+    .command-results { max-height: 400px; overflow-y: auto; padding: var(--space-2); }
+    .command-group { margin-bottom: var(--space-2); }
+    .command-group-title { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: var(--space-2) var(--space-3); }
+    .command-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); cursor: pointer; }
+    .command-item:hover, .command-item.selected { background: var(--bg-hover); }
+    .command-item svg { width: 16px; height: 16px; color: var(--text-secondary); }
+    .command-item-text { flex: 1; font-size: 0.875rem; }
+    .command-item-shortcut { display: flex; gap: var(--space-1); }
+    .command-item-shortcut kbd { font-family: var(--font-mono); font-size: 0.7rem; background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--text-tertiary); }
+    .ai-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 420px; background: var(--bg-secondary); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; transform: translateX(100%); transition: transform var(--duration-slow) var(--ease-out-expo); z-index: 50; }
+    .ai-panel.active { transform: translateX(0); }
+    .ai-panel-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4); border-bottom: 1px solid var(--border-subtle); }
+    .ai-panel-title { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-weight: 600; }
+    .ai-panel-title svg { width: 20px; height: 20px; color: var(--accent-primary); }
+    .ai-messages { flex: 1; overflow-y: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+    .ai-message { display: flex; gap: var(--space-3); }
+    .ai-message.assistant { align-items: flex-start; }
+    .ai-message.user { flex-direction: row-reverse; }
+    .ai-avatar { width: 32px; height: 32px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ai-avatar.assistant { background: linear-gradient(135deg, var(--accent-primary), #a855f7); }
+    .ai-avatar.user { background: var(--bg-tertiary); }
+    .ai-avatar svg { width: 16px; height: 16px; color: white; }
+    .ai-bubble { max-width: 80%; padding: var(--space-3); border-radius: var(--radius-xl); font-size: 0.875rem; line-height: 1.5; }
+    .ai-message.assistant .ai-bubble { background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .ai-message.user .ai-bubble { background: var(--accent-primary); color: white; }
+    .ai-suggestion { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: var(--space-3); margin-top: var(--space-2); }
+    .ai-suggestion-title { font-weight: 600; font-size: 0.8rem; color: var(--accent-hover); margin-bottom: var(--space-2); display: flex; align-items: center; gap: var(--space-2); }
+    .ai-suggestion-title svg { width: 14px; height: 14px; }
+    .ai-suggestion-item { display: flex; align-items: center; gap: var(--space-2); font-size: 0.8rem; color: var(--text-secondary); padding: var(--space-1) 0; }
+    .ai-suggestion-item .priority-dot { width: 6px; height: 6px; }
+    .ai-input-wrapper { padding: var(--space-4); border-top: 1px solid var(--border-subtle); }
+    .ai-input { display: flex; align-items: center; gap: var(--space-2); background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: var(--space-2) var(--space-3); }
+    .ai-input:focus-within { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-muted); }
+    .ai-input input { flex: 1; background: none; border: none; outline: none; color: var(--text-primary); font-size: 0.875rem; }
+    .ai-input input::placeholder { color: var(--text-muted); }
+    .ai-send-btn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-md); border: none; background: var(--accent-primary); color: white; cursor: pointer; }
+    .ai-send-btn:hover { background: var(--accent-hover); }
+    .ai-send-btn svg { width: 16px; height: 16px; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; visibility: hidden; transition: all var(--duration-normal) ease; }
+    .modal-overlay.active { opacity: 1; visibility: visible; }
+    .ticket-modal { width: 640px; max-height: 85vh; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-2xl); box-shadow: var(--shadow-xl); display: flex; flex-direction: column; transform: scale(0.95) translateY(20px); transition: all var(--duration-normal) var(--ease-out-expo); }
+    .modal-overlay.active .ticket-modal { transform: scale(1) translateY(0); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4); border-bottom: 1px solid var(--border-subtle); }
+    .modal-title { font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; }
+    .modal-close { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-md); border: none; background: none; color: var(--text-secondary); cursor: pointer; }
+    .modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .modal-body { flex: 1; overflow-y: auto; padding: var(--space-4); }
+    .modal-section { margin-bottom: var(--space-6); }
+    .modal-section-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: var(--space-2); }
+    .modal-textarea { width: 100%; min-height: 120px; background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-3); color: var(--text-primary); font-family: var(--font-body); font-size: 0.9rem; line-height: 1.6; resize: vertical; }
+    .modal-textarea:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-muted); }
+    .modal-row { display: flex; gap: var(--space-4); margin-bottom: var(--space-3); }
+    .modal-field { flex: 1; }
+    .modal-label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: var(--space-2); }
+    .modal-select { width: 100%; background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); color: var(--text-primary); font-size: 0.875rem; cursor: pointer; }
+    .modal-select:focus { outline: none; border-color: var(--accent-primary); }
+    .modal-footer { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4); border-top: 1px solid var(--border-subtle); }
+    .modal-footer-left { display: flex; gap: var(--space-2); }
+    .btn { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font-size: 0.875rem; font-weight: 500; cursor: pointer; border: none; }
+    .btn-primary { background: var(--accent-primary); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+    .btn-secondary:hover { background: var(--bg-hover); }
+    .btn-ghost { background: transparent; color: var(--text-secondary); }
+    .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-danger { background: transparent; color: var(--error); }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
+    .btn-ai { background: linear-gradient(135deg, var(--accent-primary), #a855f7); color: white; }
+    .btn-ai:hover { box-shadow: var(--accent-glow); }
+    .btn svg { width: 16px; height: 16px; }
+    .toast-container { position: fixed; bottom: var(--space-4); right: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); z-index: 200; }
+    .toast { display: flex; align-items: center; gap: var(--space-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); box-shadow: var(--shadow-lg); animation: slideIn 0.3s var(--ease-out-expo) forwards; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+    .toast svg { width: 18px; height: 18px; }
+    .toast.success svg { color: var(--success); }
+    .toast-message { font-size: 0.875rem; }
+    @media (max-width: 1024px) { .sidebar { width: 60px; } .workspace-name, .nav-section-title, .nav-item span, .label-item span { display: none; } .nav-item { justify-content: center; padding: var(--space-3); } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header"><div class="logo"><i data-lucide="zap"></i></div><span class="workspace-name">Kanban AI</span></div>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Views</div>
+          <a href="#" class="nav-item active"><i data-lucide="layout-grid"></i><span>Board</span></a>
+          <a href="#" class="nav-item"><i data-lucide="list"></i><span>List</span></a>
+          <a href="#" class="nav-item"><i data-lucide="calendar"></i><span>Timeline</span></a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Filters</div>
+          <a href="#" class="nav-item"><i data-lucide="inbox"></i><span>All Tickets</span><span class="badge">24</span></a>
+          <a href="#" class="nav-item"><i data-lucide="user"></i><span>My Tickets</span><span class="badge">8</span></a>
+          <a href="#" class="nav-item"><i data-lucide="clock"></i><span>Due Soon</span><span class="badge">3</span></a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Labels</div>
+          <div class="label-item"><span class="label-dot" style="background:#ef4444"></span><span>bug</span></div>
+          <div class="label-item"><span class="label-dot" style="background:#6366f1"></span><span>feature</span></div>
+          <div class="label-item"><span class="label-dot" style="background:#22c55e"></span><span>improvement</span></div>
+          <div class="label-item"><span class="label-dot" style="background:#f97316"></span><span>ui</span></div>
+          <div class="label-item"><span class="label-dot" style="background:#a855f7"></span><span>backend</span></div>
+        </div>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="header">
+        <div class="header-left"><h1 class="board-title">My Project</h1><span class="board-meta">24 tickets · Updated 2m ago</span></div>
+        <div class="header-center"><div class="search-bar"><i data-lucide="search"></i><input type="text" placeholder="Search tickets..."><kbd>⌘K</kbd></div></div>
+        <div class="header-right">
+          <div class="view-toggle"><button class="view-btn active"><i data-lucide="layout-grid"></i></button><button class="view-btn"><i data-lucide="list"></i></button><button class="view-btn"><i data-lucide="gantt-chart"></i></button></div>
+          <button class="icon-btn ai-btn" onclick="toggleAIPanel()"><i data-lucide="sparkles"></i></button>
+          <button class="icon-btn"><i data-lucide="settings"></i></button>
+        </div>
+      </header>
+      <div class="board-container">
+        <div class="board">
+          <div class="column">
+            <div class="column-header"><div class="column-header-left"><span class="column-dot" style="background:#71717a"></span><span class="column-title">Backlog</span><span class="column-count">5</span></div><div class="column-actions"><button class="column-btn"><i data-lucide="plus"></i></button><button class="column-btn"><i data-lucide="more-horizontal"></i></button></div></div>
+            <div class="column-cards"><div class="cards-list">
+              <div class="ticket-card" onclick="openTicketModal()"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot low"></span></div><div class="ticket-labels"><span class="ticket-label purple">backend</span></div></div><div class="ticket-title">Research authentication providers</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="message-square"></i><span>2</span></div></div><span class="ticket-effort">L</span></div></div>
+              <div class="ticket-card"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot medium"></span></div><div class="ticket-labels"><span class="ticket-label blue">feature</span></div></div><div class="ticket-title">Add export to CSV functionality</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="calendar"></i><span>Jan 25</span></div></div><span class="ticket-effort">M</span></div></div>
+              <button class="add-card-btn"><i data-lucide="plus"></i><span>Add ticket</span></button>
+            </div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-header-left"><span class="column-dot" style="background:#3b82f6"></span><span class="column-title">To Do</span><span class="column-count">4</span></div><div class="column-actions"><button class="column-btn"><i data-lucide="plus"></i></button><button class="column-btn"><i data-lucide="more-horizontal"></i></button></div></div>
+            <div class="column-cards"><div class="cards-list">
+              <div class="ticket-card"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot critical"></span></div><div class="ticket-labels"><span class="ticket-label red">bug</span><span class="ticket-label yellow">ui</span></div></div><div class="ticket-title">Fix login redirect issue on Safari</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item overdue"><i data-lucide="alert-circle"></i><span>Overdue</span></div><div class="ticket-meta-item"><i data-lucide="message-square"></i><span>5</span></div></div><span class="ticket-effort">S</span></div></div>
+              <div class="ticket-card"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot high"></span></div><div class="ticket-labels"><span class="ticket-label blue">feature</span></div></div><div class="ticket-title">Implement dark mode toggle</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="calendar"></i><span>Jan 20</span></div></div><span class="ticket-effort">M</span></div></div>
+              <div class="ticket-card"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot medium"></span></div><div class="ticket-labels"><span class="ticket-label green">improvement</span></div></div><div class="ticket-title">Optimize image loading performance</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="calendar"></i><span>Jan 22</span></div></div><span class="ticket-effort">M</span></div></div>
+              <button class="add-card-btn"><i data-lucide="plus"></i><span>Add ticket</span></button>
+            </div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-header-left"><span class="column-dot" style="background:#eab308"></span><span class="column-title">In Progress</span><span class="column-count">3</span></div><div class="column-actions"><button class="column-btn"><i data-lucide="plus"></i></button><button class="column-btn"><i data-lucide="more-horizontal"></i></button></div></div>
+            <div class="column-cards"><div class="cards-list">
+              <div class="ticket-card"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot high"></span></div><div class="ticket-labels"><span class="ticket-label purple">backend</span><span class="ticket-label blue">feature</span></div></div><div class="ticket-title">Build AI agent triage endpoint</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="calendar"></i><span>Jan 18</span></div><div class="ticket-meta-item"><i data-lucide="message-square"></i><span>8</span></div></div><span class="ticket-effort">L</span></div></div>
+              <div class="ticket-card"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot medium"></span></div><div class="ticket-labels"><span class="ticket-label yellow">ui</span></div></div><div class="ticket-title">Design command palette component</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="calendar"></i><span>Jan 19</span></div></div><span class="ticket-effort">S</span></div></div>
+              <button class="add-card-btn"><i data-lucide="plus"></i><span>Add ticket</span></button>
+            </div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-header-left"><span class="column-dot" style="background:#a855f7"></span><span class="column-title">Review</span><span class="column-count">2</span></div><div class="column-actions"><button class="column-btn"><i data-lucide="plus"></i></button><button class="column-btn"><i data-lucide="more-horizontal"></i></button></div></div>
+            <div class="column-cards"><div class="cards-list">
+              <div class="ticket-card"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot medium"></span></div><div class="ticket-labels"><span class="ticket-label yellow">ui</span><span class="ticket-label green">improvement</span></div></div><div class="ticket-title">Refactor sidebar navigation component</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="git-pull-request"></i><span>PR #42</span></div></div><span class="ticket-effort">M</span></div></div>
+              <button class="add-card-btn"><i data-lucide="plus"></i><span>Add ticket</span></button>
+            </div></div>
+          </div>
+          <div class="column">
+            <div class="column-header"><div class="column-header-left"><span class="column-dot" style="background:#22c55e"></span><span class="column-title">Done</span><span class="column-count">10</span></div><div class="column-actions"><button class="column-btn"><i data-lucide="plus"></i></button><button class="column-btn"><i data-lucide="more-horizontal"></i></button></div></div>
+            <div class="column-cards"><div class="cards-list">
+              <div class="ticket-card" style="opacity:0.7"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot low"></span></div><div class="ticket-labels"><span class="ticket-label blue">feature</span></div></div><div class="ticket-title" style="text-decoration:line-through">Setup project scaffold</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="check-circle"></i><span>Completed</span></div></div><span class="ticket-effort">M</span></div></div>
+              <div class="ticket-card" style="opacity:0.7"><div class="ticket-header"><div class="ticket-priority"><span class="priority-dot medium"></span></div><div class="ticket-labels"><span class="ticket-label yellow">ui</span></div></div><div class="ticket-title" style="text-decoration:line-through">Create design system tokens</div><div class="ticket-footer"><div class="ticket-meta"><div class="ticket-meta-item"><i data-lucide="check-circle"></i><span>Completed</span></div></div><span class="ticket-effort">S</span></div></div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <aside class="ai-panel" id="aiPanel">
+      <div class="ai-panel-header"><div class="ai-panel-title"><i data-lucide="sparkles"></i><span>AI Assistant</span></div><button class="modal-close" onclick="toggleAIPanel()"><i data-lucide="x"></i></button></div>
+      <div class="ai-messages">
+        <div class="ai-message assistant"><div class="ai-avatar assistant"><i data-lucide="bot"></i></div><div class="ai-bubble"><p>Buongiorno! 👋 Ecco il tuo daily summary:</p><div class="ai-suggestion"><div class="ai-suggestion-title"><i data-lucide="target"></i>Focus di oggi</div><div class="ai-suggestion-item"><span class="priority-dot critical"></span>Fix login redirect (Safari) - Overdue!</div><div class="ai-suggestion-item"><span class="priority-dot high"></span>Build AI triage endpoint - Due today</div><div class="ai-suggestion-item"><span class="priority-dot high"></span>Implement dark mode toggle</div></div><p style="margin-top:var(--space-3);font-size:0.85rem;color:var(--text-secondary)">Hai 1 ticket in review che potrebbe essere chiuso oggi.</p></div></div>
+        <div class="ai-message user"><div class="ai-avatar user"><i data-lucide="user"></i></div><div class="ai-bubble">Sì, sposta il refactor sidebar in done</div></div>
+        <div class="ai-message assistant"><div class="ai-avatar assistant"><i data-lucide="bot"></i></div><div class="ai-bubble">✅ Fatto! Ho spostato "Refactor sidebar navigation component" in Done.<br><br>Vuoi che ti aiuti con il bug del login Safari?</div></div>
+      </div>
+      <div class="ai-input-wrapper"><div class="ai-input"><input type="text" placeholder="Ask me anything... (⌘⇧A)"><button class="ai-send-btn"><i data-lucide="arrow-up"></i></button></div></div>
+    </aside>
+    <div class="command-palette-overlay" id="commandPalette">
+      <div class="command-palette">
+        <div class="command-input-wrapper"><i data-lucide="search"></i><input type="text" class="command-input" placeholder="Type a command or search..."></div>
+        <div class="command-results">
+          <div class="command-group"><div class="command-group-title">Actions</div><div class="command-item selected"><i data-lucide="plus"></i><span class="command-item-text">Create new ticket</span><div class="command-item-shortcut"><kbd>⌘</kbd><kbd>N</kbd></div></div><div class="command-item"><i data-lucide="sparkles"></i><span class="command-item-text">Ask AI assistant</span><div class="command-item-shortcut"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>A</kbd></div></div><div class="command-item"><i data-lucide="sun"></i><span class="command-item-text">Get daily summary</span><div class="command-item-shortcut"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></div></div></div>
+          <div class="command-group"><div class="command-group-title">Navigation</div><div class="command-item"><i data-lucide="layout-grid"></i><span class="command-item-text">Board view</span><div class="command-item-shortcut"><kbd>⌘</kbd><kbd>1</kbd></div></div><div class="command-item"><i data-lucide="list"></i><span class="command-item-text">List view</span><div class="command-item-shortcut"><kbd>⌘</kbd><kbd>2</kbd></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-overlay" id="ticketModal">
+      <div class="ticket-modal">
+        <div class="modal-header"><h2 class="modal-title">Research authentication providers</h2><button class="modal-close" onclick="closeTicketModal()"><i data-lucide="x"></i></button></div>
+        <div class="modal-body">
+          <div class="modal-section"><div class="modal-section-title">Description</div><textarea class="modal-textarea">Evaluate different authentication providers:
+- Auth0
+- Clerk  
+- Supabase Auth
+- Firebase Auth
+
+Consider: pricing, ease of integration, features.</textarea></div>
+          <div class="modal-row"><div class="modal-field"><label class="modal-label">Priority</label><select class="modal-select"><option value="low" selected>🟢 Low</option><option value="medium">🟡 Medium</option><option value="high">🟠 High</option><option value="critical">🔴 Critical</option></select></div><div class="modal-field"><label class="modal-label">Effort</label><select class="modal-select"><option value="xs">XS</option><option value="s">S</option><option value="m">M</option><option value="l" selected>L</option><option value="xl">XL</option></select></div></div>
+          <div class="modal-row"><div class="modal-field"><label class="modal-label">Column</label><select class="modal-select"><option selected>Backlog</option><option>To Do</option><option>In Progress</option><option>Review</option><option>Done</option></select></div><div class="modal-field"><label class="modal-label">Due Date</label><input type="date" class="modal-select"></div></div>
+          <div class="modal-section"><div class="modal-section-title">Labels</div><div style="display:flex;gap:8px"><span class="ticket-label purple">backend</span><button class="btn btn-ghost" style="font-size:0.8rem;padding:4px 8px"><i data-lucide="plus"></i>Add</button></div></div>
+        </div>
+        <div class="modal-footer"><div class="modal-footer-left"><button class="btn btn-ai"><i data-lucide="sparkles"></i>AI Triage</button><button class="btn btn-secondary"><i data-lucide="git-branch"></i>Decompose</button></div><div style="display:flex;gap:8px"><button class="btn btn-danger"><i data-lucide="trash-2"></i>Delete</button><button class="btn btn-primary">Save</button></div></div>
+      </div>
+    </div>
+    <div class="toast-container"></div>
+  </div>
+  <script>
+    lucide.createIcons();
+    const commandPalette = document.getElementById('commandPalette');
+    document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); commandPalette.classList.toggle('active'); if (commandPalette.classList.contains('active')) commandPalette.querySelector('.command-input').focus(); }
+      if (e.key === 'Escape') { commandPalette.classList.remove('active'); document.getElementById('ticketModal').classList.remove('active'); document.getElementById('aiPanel').classList.remove('active'); }
+    });
+    commandPalette.addEventListener('click', e => { if (e.target === commandPalette) commandPalette.classList.remove('active'); });
+    function toggleAIPanel() { document.getElementById('aiPanel').classList.toggle('active'); }
+    function openTicketModal() { document.getElementById('ticketModal').classList.add('active'); }
+    function closeTicketModal() { document.getElementById('ticketModal').classList.remove('active'); }
+    document.getElementById('ticketModal').addEventListener('click', e => { if (e.target.id === 'ticketModal') closeTicketModal(); });
+    document.querySelectorAll('.ticket-card').forEach(card => { card.draggable = true; card.addEventListener('dragstart', () => card.classList.add('dragging')); card.addEventListener('dragend', () => card.classList.remove('dragging')); });
+    function showToast(msg) { const c = document.querySelector('.toast-container'); const t = document.createElement('div'); t.className = 'toast success'; t.innerHTML = `<i data-lucide="check-circle"></i><span class="toast-message">${msg}</span>`; c.appendChild(t); lucide.createIcons(); setTimeout(() => t.remove(), 3000); }
+    setTimeout(() => showToast('Welcome! Press ⌘K for command palette'), 500);
+  </script>
+</body>
+</html>
