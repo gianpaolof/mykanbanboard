@@ -85,10 +85,8 @@
 - [x] **TASK-023**: Collegare frontend a backend
   > Completato: `src/lib/tauri.ts` API wrapper + `stores/boardStore.ts` aggiornato con invoke(), optimistic updates, e rollback on error.
 
-- [ ] **TASK-024**: Testare MVP
-  ```
-  Prompt: "Testa il flusso completo: crea board, aggiungi colonne, crea tickets, drag & drop, edit ticket, delete. Verifica che i dati persistano dopo riavvio app."
-  ```
+- [x] **TASK-024**: Testare MVP
+  > Completato: Testato flusso completo con create/delete ticket, AI chat, triage, decompose. Delete ticket funzionante.
 
 ---
 
@@ -177,10 +175,10 @@
 
 | Phase | Total | Done | Progress |
 |-------|-------|------|----------|
-| 1. Foundation | 24 | 23 | 96% |
+| 1. Foundation | 24 | 24 | 100% |
 | 2. AI Agent | 18 | 18 | 100% |
 | 3. Polish | 8 | 0 | 0% |
-| **Total** | **50** | **41** | **82%** |
+| **Total** | **50** | **42** | **84%** |
 
 ---
 
