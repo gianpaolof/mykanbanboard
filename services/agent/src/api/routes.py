@@ -31,6 +31,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
+def extract_value(obj: Any) -> Any:
+    """Extract value from DSPy prediction object.
+
+    DSPy returns Prediction objects where attributes might be
+    bound methods or actual values. This helper extracts the actual value.
+    """
+    if obj is None:
+        return None
+    # If it's a bound method, it's wrong - return as string
+    if callable(obj):
+        return str(obj)
+    # If it's a list, extract each item
+    if isinstance(obj, list):
+        return [extract_value(item) for item in obj]
+    # If it's a dict, extract each value
+    if isinstance(obj, dict):
+        return {k: extract_value(v) for k, v in obj.items()}
+    return obj
+
+
 # ============================================================================
 # DEPENDENCY INJECTION
 # ============================================================================
@@ -89,15 +109,19 @@ async def triage_ticket(request: TriageRequest) -> TriageResponse:
             existing_labels=request.existing_labels,
         )
 
-        # Ensure labels is a list and limit to 3
-        labels = result.labels if isinstance(result.labels, list) else [result.labels]
-        labels = labels[:3]
+        # Extract values from DSPy prediction object and ensure labels is a list
+        priority = extract_value(result.priority)
+        labels_raw = extract_value(result.labels)
+        labels = labels_raw if isinstance(labels_raw, list) else [labels_raw]
+        labels = [str(l) for l in labels[:3]]  # Ensure strings and limit to 3
+        effort = extract_value(result.effort_estimate)
+        reasoning = extract_value(result.reasoning)
 
         return TriageResponse(
-            priority=result.priority,
+            priority=priority,
             labels=labels,
-            effort=result.effort_estimate,
-            reasoning=result.reasoning,
+            effort=effort,
+            reasoning=reasoning,
         )
 
     except Exception as e:
@@ -141,30 +165,36 @@ async def decompose_task(request: DecomposeRequest) -> DecomposeResponse:
             context=request.context or "",
         )
 
+        # Extract values from DSPy prediction
+        raw_subtasks = extract_value(result.subtasks)
+        raw_dependencies = extract_value(result.dependencies)
+        reasoning = extract_value(result.reasoning)
+
         # Parse subtasks
         subtasks = []
-        for subtask in result.subtasks:
-            if isinstance(subtask, dict):
-                subtasks.append(subtask)
-            else:
-                # Handle string or other formats
-                subtasks.append({
-                    "title": str(subtask),
-                    "description": "",
-                    "effort": "m",
-                })
+        if raw_subtasks:
+            for subtask in raw_subtasks:
+                if isinstance(subtask, dict):
+                    subtasks.append(subtask)
+                else:
+                    # Handle string or other formats
+                    subtasks.append({
+                        "title": str(subtask),
+                        "description": "",
+                        "effort": "m",
+                    })
 
         # Parse dependencies
         dependencies = []
-        if result.dependencies:
-            for dep in result.dependencies:
+        if raw_dependencies:
+            for dep in raw_dependencies:
                 if isinstance(dep, (list, tuple)) and len(dep) == 2:
                     dependencies.append((int(dep[0]), int(dep[1])))
 
         return DecomposeResponse(
             subtasks=subtasks,
             dependencies=dependencies,
-            reasoning=result.reasoning,
+            reasoning=reasoning,
         )
 
     except Exception as e:
@@ -207,13 +237,18 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
             current_context=request.context,
         )
 
+        # Extract values from DSPy prediction
+        action = extract_value(result.action)
+        raw_params = extract_value(result.params)
+        response = extract_value(result.response)
+
         # Parse params
-        params = result.params if isinstance(result.params, dict) else {}
+        params = raw_params if isinstance(raw_params, dict) else {}
 
         return ChatResponse(
-            action=result.action,
+            action=action,
             params=params,
-            response=result.response,
+            response=response,
         )
 
     except Exception as e:
@@ -316,11 +351,17 @@ async def get_daily_summary() -> DailySummaryResponse:
             recently_completed=[],
         )
 
+        # Extract values from DSPy prediction
+        greeting = extract_value(result.greeting)
+        focus_today = extract_value(result.focus_today)
+        blockers = extract_value(result.blockers)
+        quick_wins = extract_value(result.quick_wins)
+
         return DailySummaryResponse(
-            greeting=result.greeting,
-            focus_today=result.focus_today[:3],
-            blockers=result.blockers,
-            quick_wins=result.quick_wins,
+            greeting=greeting,
+            focus_today=focus_today[:3] if focus_today else [],
+            blockers=blockers or [],
+            quick_wins=quick_wins or [],
         )
 
     except Exception as e:
@@ -331,28 +372,3 @@ async def get_daily_summary() -> DailySummaryResponse:
         )
 
 
-# ============================================================================
-# ERROR HANDLER
-# ============================================================================
-
-
-@router.exception_handler(Exception)
-async def generic_exception_handler(request: Any, exc: Exception) -> JSONResponse:
-    """Handle generic exceptions.
-
-    Args:
-        request: Request object
-        exc: Exception
-
-    Returns:
-        Error response
-    """
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content=ErrorResponse(
-            error="internal_error",
-            message=str(exc),
-            details={},
-        ).model_dump(),
-    )
