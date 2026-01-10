@@ -72,8 +72,8 @@ class ChatRequest(BaseModel):
     """Request model for chat interaction."""
 
     message: str = Field(..., min_length=1, description="User message")
-    context: dict = Field(
-        default_factory=dict,
+    context: dict | None = Field(
+        default=None,
         description="Current board context",
     )
 

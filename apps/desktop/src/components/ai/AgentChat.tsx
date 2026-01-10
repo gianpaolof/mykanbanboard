@@ -234,6 +234,7 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
   const executeAction = useCallback(async (action: string, params: Record<string, unknown>): Promise<{ type: string; data: Record<string, unknown> } | null> => {
     try {
       switch (action) {
+        case 'create':
         case 'create_ticket': {
           // Get first column as default if not specified
           const targetColumnId = (params.columnId as string) || columns[0]?.id;
@@ -241,12 +242,36 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
             throw new Error('No columns available to create ticket');
           }
 
+          // Map priority from agent response to valid values
+          const priorityMap: Record<string, 'urgent' | 'high' | 'medium' | 'low' | 'none'> = {
+            'critical': 'urgent',
+            'urgent': 'urgent',
+            'high': 'high',
+            'medium': 'medium',
+            'normal': 'medium',
+            'low': 'low',
+            'none': 'none',
+          };
+          const rawPriority = (params.priority as string)?.toLowerCase() || 'medium';
+          const priority = priorityMap[rawPriority] || 'medium';
+
+          // Map effort from agent response to valid values
+          const effortMap: Record<string, 'xs' | 's' | 'm' | 'l' | 'xl'> = {
+            'xs': 'xs', 'extra-small': 'xs', '1': 'xs',
+            's': 's', 'small': 's', '2': 's',
+            'm': 'm', 'medium': 'm', '3': 'm',
+            'l': 'l', 'large': 'l', '4': 'l',
+            'xl': 'xl', 'extra-large': 'xl', '5': 'xl',
+          };
+          const rawEffort = String(params.effort || 'm').toLowerCase();
+          const effort = effortMap[rawEffort] || 'm';
+
           const newTicket = await addTicket({
             title: (params.title as string) || 'New Ticket',
             description: (params.description as string) || '',
             columnId: targetColumnId,
-            priority: (params.priority as 'urgent' | 'high' | 'medium' | 'low' | 'none') || 'medium',
-            effort: (params.effort as 'xs' | 's' | 'm' | 'l' | 'xl') || 'm',
+            priority,
+            effort,
           });
 
           return {
@@ -320,17 +345,22 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
         : undefined;
 
       // Call agent API
+      console.log('Calling agent API with:', userMessage.content);
       const result: AgentChatResult = await api.agent.chat(
         userMessage.content,
         chatContext
       );
+      console.log('Agent API response:', result);
 
       // Execute action if present
       const executedActions: Array<{ type: string; data: Record<string, unknown> }> = [];
 
+      console.log('Action from agent:', result.action, 'Params:', result.params);
       if (result.action && result.action !== 'none' && result.action !== 'chat') {
         try {
+          console.log('Executing action:', result.action);
           const actionResult = await executeAction(result.action, result.params || {});
+          console.log('Action result:', actionResult);
           if (actionResult) {
             executedActions.push(actionResult);
           }

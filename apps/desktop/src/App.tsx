@@ -3,7 +3,7 @@ import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { CommandPalette } from '@/components/layout/CommandPalette';
-import { AIPanel, type AIMessage } from '@/components/ai/AIPanel';
+import { AgentChat } from '@/components/ai/AgentChat';
 import { useBoardStore } from '@/stores/boardStore';
 
 function App() {
@@ -14,8 +14,6 @@ function App() {
   // UI State
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
-  const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
 
   // Count total tickets
   const ticketCount = Object.values(tickets).flat().length;
@@ -67,37 +65,6 @@ function App() {
     // TODO: Implement view switching
   }, []);
 
-  const handleSendAIMessage = useCallback((message: string) => {
-    // Add user message
-    const userMessage: AIMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: message,
-      timestamp: new Date().toISOString(),
-    };
-    setAiMessages((prev) => [...prev, userMessage]);
-    setAiLoading(true);
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: AIMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: 'Ho ricevuto il tuo messaggio. Questa funzionalità sarà implementata quando collegheremo il Python agent con DSPy.',
-        timestamp: new Date().toISOString(),
-        suggestions: message.toLowerCase().includes('summary') ? [{
-          title: 'Focus di oggi',
-          items: [
-            { priority: 'critical', text: 'Fix login redirect (Safari) - Overdue!' },
-            { priority: 'high', text: 'Build AI triage endpoint - Due today' },
-            { priority: 'medium', text: 'Design command palette component' },
-          ],
-        }] : undefined,
-      };
-      setAiMessages((prev) => [...prev, aiResponse]);
-      setAiLoading(false);
-    }, 1000);
-  }, []);
 
   if (isLoading) {
     return (
@@ -143,13 +110,10 @@ function App() {
         onSwitchView={handleSwitchView}
       />
 
-      {/* AI Panel */}
-      <AIPanel
-        open={aiPanelOpen}
+      {/* AI Chat */}
+      <AgentChat
+        isOpen={aiPanelOpen}
         onClose={() => setAiPanelOpen(false)}
-        messages={aiMessages}
-        onSendMessage={handleSendAIMessage}
-        isLoading={aiLoading}
       />
     </div>
   );

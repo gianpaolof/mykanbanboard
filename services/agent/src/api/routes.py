@@ -170,12 +170,29 @@ async def decompose_task(request: DecomposeRequest) -> DecomposeResponse:
         raw_dependencies = extract_value(result.dependencies)
         reasoning = extract_value(result.reasoning)
 
+        # Map effort values from various formats to valid xs/s/m/l/xl
+        def normalize_effort(effort: Any) -> str:
+            effort_map = {
+                "xs": "xs", "extra-small": "xs", "1": "xs", 1: "xs",
+                "s": "s", "small": "s", "2": "s", 2: "s",
+                "m": "m", "medium": "m", "3": "m", 3: "m",
+                "l": "l", "large": "l", "4": "l", 4: "l",
+                "xl": "xl", "extra-large": "xl", "5": "xl", 5: "xl",
+            }
+            return effort_map.get(effort, effort_map.get(str(effort).lower(), "m"))
+
         # Parse subtasks
         subtasks = []
         if raw_subtasks:
             for subtask in raw_subtasks:
                 if isinstance(subtask, dict):
-                    subtasks.append(subtask)
+                    # Normalize effort field
+                    normalized = {**subtask}
+                    if "effort" in normalized:
+                        normalized["effort"] = normalize_effort(normalized["effort"])
+                    else:
+                        normalized["effort"] = "m"
+                    subtasks.append(normalized)
                 else:
                     # Handle string or other formats
                     subtasks.append({
@@ -234,7 +251,7 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
         action_decider = ActionDeciderModule()
         result = action_decider(
             user_message=request.message,
-            current_context=request.context,
+            current_context=request.context or {},
         )
 
         # Extract values from DSPy prediction
