@@ -1,5 +1,5 @@
 // components/kanban/KanbanBoard.tsx
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, memo } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -18,7 +18,7 @@ import { TicketCard } from './TicketCard';
 import { TicketModal } from './TicketModal';
 import type { Ticket } from '@/types';
 
-export function KanbanBoard() {
+export const KanbanBoard = memo(function KanbanBoard() {
   const { board, tickets, moveTicket, setTickets, deleteTicket } = useBoardStore();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
@@ -142,6 +142,30 @@ export function KanbanBoard() {
     }
   }, [tickets, moveTicket, setTickets]);
 
+  // Memoize sorted columns to avoid re-sorting on every render
+  const sortedColumns = useMemo(() => {
+    if (!board) return [];
+    return [...board.columns].sort((a, b) => a.position - b.position);
+  }, [board]);
+
+  // Memoize onTicketClick handler
+  const handleTicketClick = useCallback((ticket: Ticket) => {
+    setSelectedTicket(ticket);
+  }, []);
+
+  // Memoize onDelete handler
+  const handleDelete = useCallback(async () => {
+    if (selectedTicket) {
+      await deleteTicket(selectedTicket.id);
+      setSelectedTicket(null);
+    }
+  }, [selectedTicket, deleteTicket]);
+
+  // Memoize onClose handler
+  const handleCloseModal = useCallback(() => {
+    setSelectedTicket(null);
+  }, []);
+
   if (!board) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -160,19 +184,17 @@ export function KanbanBoard() {
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-4 h-full overflow-x-auto p-4">
-          {board.columns
-            .sort((a, b) => a.position - b.position)
-            .map((column) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                tickets={tickets[column.id] || []}
-                onTicketClick={setSelectedTicket}
-                onAddTicket={() => {
-                  // TODO: Open create ticket modal
-                }}
-              />
-            ))}
+          {sortedColumns.map((column) => (
+            <KanbanColumn
+              key={column.id}
+              column={column}
+              tickets={tickets[column.id] || []}
+              onTicketClick={handleTicketClick}
+              onAddTicket={() => {
+                // TODO: Open create ticket modal
+              }}
+            />
+          ))}
         </div>
 
         {/* Drag Overlay - shows the card being dragged */}
@@ -187,13 +209,10 @@ export function KanbanBoard() {
       {selectedTicket && (
         <TicketModal
           ticket={selectedTicket}
-          onClose={() => setSelectedTicket(null)}
-          onDelete={async () => {
-            await deleteTicket(selectedTicket.id);
-            setSelectedTicket(null);
-          }}
+          onClose={handleCloseModal}
+          onDelete={handleDelete}
         />
       )}
     </>
   );
-}
+});

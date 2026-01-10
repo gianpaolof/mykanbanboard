@@ -1,5 +1,5 @@
 // components/kanban/TicketModal.tsx
-import { useState } from 'react';
+import { useState, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, GitBranch, Trash2, Check, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,18 @@ const PRIORITY_CONFIG = {
   low: { emoji: '🟢', label: 'Low', color: 'text-gray-400' },
 } as const;
 
+// Effort badge colors - moved outside component
+const EFFORT_COLORS: Record<string, string> = {
+  xs: 'bg-green-500/15 text-green-300 border-green-500/30',
+  s: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  m: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30',
+  l: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+  xl: 'bg-red-500/15 text-red-300 border-red-500/30',
+};
+
+const getEffortColor = (effort?: string) =>
+  EFFORT_COLORS[effort || ''] || 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30';
+
 interface TicketModalProps {
   ticket: Ticket;
   onClose: () => void;
@@ -29,7 +41,7 @@ interface TicketModalProps {
   onDelete?: () => void;
 }
 
-export function TicketModal({
+export const TicketModal = memo(function TicketModal({
   ticket,
   onClose,
   onSave,
@@ -52,20 +64,8 @@ export function TicketModal({
   const [decomposeResult, setDecomposeResult] = useState<SubtaskSuggestion[] | null>(null);
   const [isCreatingSubtasks, setIsCreatingSubtasks] = useState(false);
 
-  // Effort badge colors
-  const getEffortColor = (effort?: string) => {
-    switch (effort) {
-      case 'xs': return 'bg-green-500/15 text-green-300 border-green-500/30';
-      case 's': return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
-      case 'm': return 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30';
-      case 'l': return 'bg-orange-500/15 text-orange-300 border-orange-500/30';
-      case 'xl': return 'bg-red-500/15 text-red-300 border-red-500/30';
-      default: return 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30';
-    }
-  };
-
   // Handle AI Triage
-  const handleAITriage = async () => {
+  const handleAITriage = useCallback(async () => {
     setIsTriaging(true);
     setTriageError(null);
     setTriageResult(null);
@@ -83,10 +83,10 @@ export function TicketModal({
     } finally {
       setIsTriaging(false);
     }
-  };
+  }, [ticket.id, ticket.title, ticket.description, description]);
 
   // Apply AI suggestions to form
-  const applyTriageSuggestions = () => {
+  const applyTriageSuggestions = useCallback(() => {
     if (!triageResult) return;
 
     if (triageResult.priority) {
@@ -100,15 +100,15 @@ export function TicketModal({
 
     // Clear the result after applying
     setTriageResult(null);
-  };
+  }, [triageResult]);
 
   // Dismiss triage results
-  const dismissTriageResult = () => {
+  const dismissTriageResult = useCallback(() => {
     setTriageResult(null);
     setTriageError(null);
-  };
+  }, []);
 
-  const handleDecompose = async () => {
+  const handleDecompose = useCallback(async () => {
     setIsDecomposing(true);
     setDecomposeResult(null);
 
@@ -132,19 +132,18 @@ export function TicketModal({
     } finally {
       setIsDecomposing(false);
     }
-  };
+  }, [ticket.id, ticket.title, ticket.description]);
 
-  const toggleSubtaskSelection = (index: number) => {
-    if (!decomposeResult) return;
-
-    setDecomposeResult(
-      decomposeResult.map((subtask, i) =>
+  const toggleSubtaskSelection = useCallback((index: number) => {
+    setDecomposeResult((prev) => {
+      if (!prev) return prev;
+      return prev.map((subtask, i) =>
         i === index ? { ...subtask, selected: !subtask.selected } : subtask
-      )
-    );
-  };
+      );
+    });
+  }, []);
 
-  const createSubtasks = async () => {
+  const createSubtasks = useCallback(async () => {
     if (!decomposeResult) return;
 
     const selectedSubtasks = decomposeResult.filter(s => s.selected);
@@ -170,11 +169,40 @@ export function TicketModal({
     } finally {
       setIsCreatingSubtasks(false);
     }
-  };
+  }, [decomposeResult, addTicket, ticket.columnId, onClose]);
 
-  const cancelDecompose = () => {
+  const cancelDecompose = useCallback(() => {
     setDecomposeResult(null);
-  };
+  }, []);
+
+  // Memoize selected subtask count
+  const selectedSubtaskCount = useMemo(
+    () => decomposeResult?.filter(s => s.selected).length ?? 0,
+    [decomposeResult]
+  );
+
+  // Memoize handler for description change
+  const handleDescriptionChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value),
+    []
+  );
+
+  // Memoize handler for priority change
+  const handlePriorityChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => setPriority(e.target.value as Priority),
+    []
+  );
+
+  // Memoize handler for effort change
+  const handleEffortChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => setEffort(e.target.value as Effort),
+    []
+  );
+
+  // Memoize save handler
+  const handleSave = useCallback(() => {
+    onSave?.({ description, priority, effort });
+  }, [onSave, description, priority, effort]);
 
   return (
     <AnimatePresence>
@@ -220,7 +248,7 @@ export function TicketModal({
               </label>
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={handleDescriptionChange}
                 placeholder="Add a description..."
                 className={cn(
                   'w-full min-h-[120px] p-3',
@@ -385,7 +413,7 @@ export function TicketModal({
                 </label>
                 <select
                   value={priority || 'medium'}
-                  onChange={(e) => setPriority(e.target.value as Priority)}
+                  onChange={handlePriorityChange}
                   className={cn(
                     'w-full p-2',
                     'bg-zinc-950 border border-zinc-800 rounded-lg',
@@ -407,7 +435,7 @@ export function TicketModal({
                 </label>
                 <select
                   value={effort || 'm'}
-                  onChange={(e) => setEffort(e.target.value as Effort)}
+                  onChange={handleEffortChange}
                   className={cn(
                     'w-full p-2',
                     'bg-zinc-950 border border-zinc-800 rounded-lg',
@@ -457,7 +485,7 @@ export function TicketModal({
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-indigo-300 flex items-center gap-2">
                     <GitBranch className="w-4 h-4" />
-                    Suggested Subtasks ({decomposeResult.filter(s => s.selected).length} selected)
+                    Suggested Subtasks ({selectedSubtaskCount} selected)
                   </h3>
                 </div>
 
@@ -521,7 +549,7 @@ export function TicketModal({
                 <div className="flex gap-2">
                   <button
                     onClick={createSubtasks}
-                    disabled={isCreatingSubtasks || decomposeResult.filter(s => s.selected).length === 0}
+                    disabled={isCreatingSubtasks || selectedSubtaskCount === 0}
                     className={cn(
                       'flex-1 px-4 py-2 rounded-lg text-sm font-medium',
                       'bg-indigo-500 text-white',
@@ -536,7 +564,7 @@ export function TicketModal({
                         Creating...
                       </>
                     ) : (
-                      <>Create Selected ({decomposeResult.filter(s => s.selected).length})</>
+                      <>Create Selected ({selectedSubtaskCount})</>
                     )}
                   </button>
                   <button
@@ -619,7 +647,7 @@ export function TicketModal({
                 Delete
               </button>
               <button
-                onClick={() => onSave?.({ description, priority, effort })}
+                onClick={handleSave}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-500 text-white hover:bg-indigo-400 transition-colors"
               >
                 Save changes
@@ -630,4 +658,4 @@ export function TicketModal({
       </motion.div>
     </AnimatePresence>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -9,12 +9,18 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
-  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/tauri';
 import type { AgentChatResult } from '@/lib/tauri';
 import { useBoardStore } from '@/stores/boardStore';
+import type { Priority } from '@/types';
+
+// ===========================================
+// CONSTANTS
+// ===========================================
+
+const REQUEST_TIMEOUT_MS = 15000; // 15 seconds timeout
 
 // ===========================================
 // TYPES
@@ -113,7 +119,7 @@ interface MessageBubbleProps {
   message: AgentChatMessage;
 }
 
-const MessageBubble = ({ message }: MessageBubbleProps) => {
+const MessageBubble = memo(({ message }: MessageBubbleProps) => {
   const isAssistant = message.role === 'assistant';
 
   return (
@@ -176,7 +182,9 @@ const MessageBubble = ({ message }: MessageBubbleProps) => {
       </div>
     </motion.div>
   );
-};
+});
+
+MessageBubble.displayName = 'MessageBubble';
 
 // ===========================================
 // TYPING INDICATOR
@@ -218,7 +226,7 @@ const TypingIndicator = () => {
 // AGENT CHAT COMPONENT
 // ===========================================
 
-export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
+export const AgentChat = memo(({ isOpen, onClose, context }: AgentChatProps) => {
   const [messages, setMessages] = useState<AgentChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -226,9 +234,21 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isCancelledRef = useRef(false);
 
   // Get store actions for executing agent commands
   const { addTicket, columns } = useBoardStore();
+
+  // Cleanup timeout on unmount or when loading stops
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      isCancelledRef.current = true;
+    };
+  }, []);
 
   // Execute actions returned by the agent
   const executeAction = useCallback(async (action: string, params: Record<string, unknown>): Promise<{ type: string; data: Record<string, unknown> } | null> => {
@@ -242,18 +262,17 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
             throw new Error('No columns available to create ticket');
           }
 
-          // Map priority from agent response to valid values
-          const priorityMap: Record<string, 'urgent' | 'high' | 'medium' | 'low' | 'none'> = {
-            'critical': 'urgent',
-            'urgent': 'urgent',
+          // Map priority from agent response to valid Priority type values
+          const priorityMap: Record<string, Priority> = {
+            'critical': 'critical',
+            'urgent': 'critical',
             'high': 'high',
             'medium': 'medium',
             'normal': 'medium',
             'low': 'low',
-            'none': 'none',
           };
           const rawPriority = (params.priority as string)?.toLowerCase() || 'medium';
-          const priority = priorityMap[rawPriority] || 'medium';
+          const priority: Priority = priorityMap[rawPriority] || 'medium';
 
           // Map effort from agent response to valid values
           const effortMap: Record<string, 'xs' | 's' | 'm' | 'l' | 'xl'> = {
@@ -320,7 +339,7 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
     }
   }, [inputValue]);
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() || isLoading) return;
 
     const userMessage: AgentChatMessage = {
@@ -334,6 +353,23 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
     setInputValue('');
     setIsLoading(true);
     setError(null);
+    isCancelledRef.current = false;
+
+    // Set timeout guard
+    timeoutRef.current = setTimeout(() => {
+      if (!isCancelledRef.current) {
+        isCancelledRef.current = true;
+        setIsLoading(false);
+        setError('Request timed out. Please try again.');
+        const timeoutMsg: AgentChatMessage = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: 'Sorry, the request timed out. The AI agent might be busy or unavailable. Please try again.',
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, timeoutMsg]);
+      }
+    }, REQUEST_TIMEOUT_MS);
 
     try {
       // Build context object
@@ -345,30 +381,36 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
         : undefined;
 
       // Call agent API
-      console.log('Calling agent API with:', userMessage.content);
       const result: AgentChatResult = await api.agent.chat(
         userMessage.content,
         chatContext
       );
-      console.log('Agent API response:', result);
+
+      // Clear timeout since we got a response
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      // Check if request was cancelled
+      if (isCancelledRef.current) return;
 
       // Execute action if present
       const executedActions: Array<{ type: string; data: Record<string, unknown> }> = [];
 
-      console.log('Action from agent:', result.action, 'Params:', result.params);
       if (result.action && result.action !== 'none' && result.action !== 'chat') {
         try {
-          console.log('Executing action:', result.action);
           const actionResult = await executeAction(result.action, result.params || {});
-          console.log('Action result:', actionResult);
           if (actionResult) {
             executedActions.push(actionResult);
           }
-        } catch (actionErr) {
-          console.error('Action execution failed:', actionErr);
+        } catch {
           // Still show the response, but note the action failed
         }
       }
+
+      // Check again if cancelled after action execution
+      if (isCancelledRef.current) return;
 
       const assistantMessage: AgentChatMessage = {
         id: generateMessageId(),
@@ -380,7 +422,14 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
-      console.error('Agent chat error:', err);
+      // Clear timeout on error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      if (isCancelledRef.current) return;
+
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
 
@@ -393,21 +442,30 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
-      setIsLoading(false);
+      if (!isCancelledRef.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [inputValue, isLoading, context, executeAction]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
-  };
+  }, [handleSendMessage]);
 
-  const handleClearChat = () => {
+  const handleClearChat = useCallback(() => {
     setMessages([]);
     setError(null);
-  };
+    // Cancel any pending request
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    isCancelledRef.current = true;
+    setIsLoading(false);
+  }, []);
 
   return (
     <AnimatePresence>
@@ -583,4 +641,6 @@ export const AgentChat = ({ isOpen, onClose, context }: AgentChatProps) => {
       )}
     </AnimatePresence>
   );
-};
+});
+
+AgentChat.displayName = 'AgentChat';

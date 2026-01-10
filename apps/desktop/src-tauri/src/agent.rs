@@ -9,7 +9,7 @@ use tokio::time::sleep;
 
 // Agent server configuration
 const AGENT_BASE_URL: &str = "http://localhost:8765/api";
-const REQUEST_TIMEOUT_SECS: u64 = 30;
+const REQUEST_TIMEOUT_SECS: u64 = 15;
 
 // Sidecar configuration
 const AGENT_STARTUP_TIMEOUT_SECS: u64 = 30;

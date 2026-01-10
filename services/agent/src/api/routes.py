@@ -2,6 +2,8 @@
 
 from typing import Any
 import logging
+import asyncio
+from functools import wraps
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
@@ -29,6 +31,56 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
+
+# Timeout constants (in seconds)
+TRIAGE_TIMEOUT = 12
+DECOMPOSE_TIMEOUT = 12
+CHAT_TIMEOUT = 12
+DAILY_SUMMARY_TIMEOUT = 10
+
+
+async def run_with_timeout(coro, timeout_seconds: int, operation_name: str):
+    """Run a coroutine with a timeout.
+
+    Args:
+        coro: The coroutine to run
+        timeout_seconds: Maximum time to wait
+        operation_name: Name of the operation for error messages
+
+    Returns:
+        The result of the coroutine
+
+    Raises:
+        HTTPException: If the operation times out
+    """
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout_seconds)
+    except asyncio.TimeoutError:
+        logger.error(f"{operation_name} timed out after {timeout_seconds}s")
+        raise HTTPException(
+            status_code=504,
+            detail=f"{operation_name} timed out after {timeout_seconds} seconds. Please try again.",
+        )
+
+
+def run_sync_with_timeout(func, timeout_seconds: int, operation_name: str):
+    """Run a synchronous function in a thread pool with timeout.
+
+    Args:
+        func: The function to call (will be wrapped in to_thread)
+        timeout_seconds: Maximum time to wait
+        operation_name: Name of the operation for error messages
+
+    Returns:
+        The result of the function
+
+    Raises:
+        HTTPException: If the operation times out
+    """
+    async def wrapper():
+        return await asyncio.to_thread(func)
+
+    return run_with_timeout(wrapper(), timeout_seconds, operation_name)
 
 
 def extract_value(obj: Any) -> Any:
@@ -103,11 +155,16 @@ async def triage_ticket(request: TriageRequest) -> TriageResponse:
         logger.info(f"Triaging ticket: {request.ticket_id}")
 
         triage_module = TriageModule()
-        result = triage_module(
-            title=request.title,
-            description=request.description,
-            existing_labels=request.existing_labels,
-        )
+
+        # Run DSPy module with timeout
+        def run_triage():
+            return triage_module(
+                title=request.title,
+                description=request.description,
+                existing_labels=request.existing_labels,
+            )
+
+        result = await run_sync_with_timeout(run_triage, TRIAGE_TIMEOUT, "Triage")
 
         # Extract values from DSPy prediction object and ensure labels is a list
         priority = extract_value(result.priority)
@@ -124,6 +181,8 @@ async def triage_ticket(request: TriageRequest) -> TriageResponse:
             reasoning=reasoning,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Triage failed: {str(e)}")
         raise HTTPException(
@@ -159,11 +218,16 @@ async def decompose_task(request: DecomposeRequest) -> DecomposeResponse:
         logger.info(f"Decomposing task: {request.ticket_id}")
 
         decompose_module = DecomposeModule()
-        result = decompose_module(
-            title=request.title,
-            description=request.description,
-            context=request.context or "",
-        )
+
+        # Run DSPy module with timeout
+        def run_decompose():
+            return decompose_module(
+                title=request.title,
+                description=request.description,
+                context=request.context or "",
+            )
+
+        result = await run_sync_with_timeout(run_decompose, DECOMPOSE_TIMEOUT, "Decompose")
 
         # Extract values from DSPy prediction
         raw_subtasks = extract_value(result.subtasks)
@@ -214,6 +278,8 @@ async def decompose_task(request: DecomposeRequest) -> DecomposeResponse:
             reasoning=reasoning,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Decomposition failed: {str(e)}")
         raise HTTPException(
@@ -249,10 +315,15 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
         logger.info(f"Chat message: {request.message[:50]}...")
 
         action_decider = ActionDeciderModule()
-        result = action_decider(
-            user_message=request.message,
-            current_context=request.context or {},
-        )
+
+        # Run DSPy module with timeout
+        def run_chat():
+            return action_decider(
+                user_message=request.message,
+                current_context=request.context or {},
+            )
+
+        result = await run_sync_with_timeout(run_chat, CHAT_TIMEOUT, "Chat")
 
         # Extract values from DSPy prediction
         action = extract_value(result.action)
@@ -268,6 +339,8 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
             response=response,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Chat failed: {str(e)}")
         raise HTTPException(
@@ -361,12 +434,17 @@ async def get_daily_summary() -> DailySummaryResponse:
 
         # Placeholder data - will be replaced with real ticket data
         summary_module = DailySummaryModule()
-        result = summary_module(
-            in_progress=[],
-            blocked=[],
-            due_soon=[],
-            recently_completed=[],
-        )
+
+        # Run DSPy module with timeout
+        def run_summary():
+            return summary_module(
+                in_progress=[],
+                blocked=[],
+                due_soon=[],
+                recently_completed=[],
+            )
+
+        result = await run_sync_with_timeout(run_summary, DAILY_SUMMARY_TIMEOUT, "Daily summary")
 
         # Extract values from DSPy prediction
         greeting = extract_value(result.greeting)
@@ -381,11 +459,11 @@ async def get_daily_summary() -> DailySummaryResponse:
             quick_wins=quick_wins or [],
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Daily summary failed: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Daily summary failed: {str(e)}",
         )
-
-

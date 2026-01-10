@@ -61,13 +61,6 @@ export function CommandPalette({
     onOpenChange(false);
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    // Only close if clicking the backdrop itself, not children
-    if (e.target === e.currentTarget) {
-      onOpenChange(false);
-    }
-  };
-
   if (!open) return null;
 
   return (

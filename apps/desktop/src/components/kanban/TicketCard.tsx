@@ -1,4 +1,5 @@
 // components/kanban/TicketCard.tsx
+import { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -12,12 +13,13 @@ interface TicketCardProps {
   isDragging?: boolean;
 }
 
+// Move constants outside component to avoid recreation
 const priorityColors = {
   critical: 'bg-red-500 shadow-red-500/50 shadow-[0_0_8px]',
   high: 'bg-orange-500 shadow-orange-500/50 shadow-[0_0_8px]',
   medium: 'bg-yellow-500',
   low: 'bg-green-500',
-};
+} as const;
 
 const labelColors: Record<string, string> = {
   red: 'bg-red-500/15 text-red-300',
@@ -28,7 +30,21 @@ const labelColors: Record<string, string> = {
   pink: 'bg-pink-500/15 text-pink-300',
 };
 
-export function TicketCard({ ticket, onClick, isDragging }: TicketCardProps) {
+// Date formatter singleton - avoid recreation
+const dateFormatter = new Intl.DateTimeFormat('en', {
+  month: 'short',
+  day: 'numeric'
+});
+
+function formatDate(date: Date | string): string {
+  return dateFormatter.format(new Date(date));
+}
+
+export const TicketCard = memo(function TicketCard({
+  ticket,
+  onClick,
+  isDragging
+}: TicketCardProps) {
   const {
     attributes,
     listeners,
@@ -37,12 +53,20 @@ export function TicketCard({ ticket, onClick, isDragging }: TicketCardProps) {
     transition,
   } = useSortable({ id: ticket.id });
 
-  const style = {
+  const style = useMemo(() => ({
     transform: CSS.Transform.toString(transform),
     transition,
-  };
+  }), [transform, transition]);
 
-  const isOverdue = ticket.dueDate && new Date(ticket.dueDate) < new Date();
+  const isOverdue = useMemo(() => {
+    if (!ticket.dueDate) return false;
+    return new Date(ticket.dueDate) < new Date();
+  }, [ticket.dueDate]);
+
+  const visibleLabels = useMemo(() =>
+    ticket.labels.slice(0, 3),
+    [ticket.labels]
+  );
 
   return (
     <motion.div
@@ -83,10 +107,10 @@ export function TicketCard({ ticket, onClick, isDragging }: TicketCardProps) {
             />
           )}
         </div>
-        
-        {ticket.labels.length > 0 && (
+
+        {visibleLabels.length > 0 && (
           <div className="flex gap-1 flex-wrap justify-end">
-            {ticket.labels.slice(0, 3).map((label) => (
+            {visibleLabels.map((label) => (
               <span
                 key={label.id}
                 className={cn(
@@ -123,7 +147,7 @@ export function TicketCard({ ticket, onClick, isDragging }: TicketCardProps) {
               {isOverdue ? 'Overdue' : formatDate(ticket.dueDate)}
             </span>
           )}
-          
+
           {ticket.comments.length > 0 && (
             <span className="flex items-center gap-1">
               <MessageSquare className="w-3 h-3" />
@@ -140,11 +164,17 @@ export function TicketCard({ ticket, onClick, isDragging }: TicketCardProps) {
       </div>
     </motion.div>
   );
-}
-
-function formatDate(date: Date | string): string {
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric'
-  }).format(new Date(date));
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison for better memoization
+  return (
+    prevProps.ticket.id === nextProps.ticket.id &&
+    prevProps.ticket.title === nextProps.ticket.title &&
+    prevProps.ticket.priority === nextProps.ticket.priority &&
+    prevProps.ticket.effort === nextProps.ticket.effort &&
+    prevProps.ticket.dueDate === nextProps.ticket.dueDate &&
+    prevProps.ticket.labels.length === nextProps.ticket.labels.length &&
+    prevProps.ticket.comments.length === nextProps.ticket.comments.length &&
+    prevProps.isDragging === nextProps.isDragging &&
+    prevProps.onClick === nextProps.onClick
+  );
+});

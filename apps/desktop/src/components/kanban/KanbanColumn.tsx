@@ -1,4 +1,5 @@
 // components/kanban/KanbanColumn.tsx
+import { memo, useMemo, useCallback } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -14,17 +15,32 @@ interface KanbanColumnProps {
   onAddTicket?: () => void;
 }
 
-export function KanbanColumn({ 
-  column, 
-  tickets, 
+// Motion variants - defined outside component to avoid recreation
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05 }
+  }
+};
+
+export const KanbanColumn = memo(function KanbanColumn({
+  column,
+  tickets,
   onTicketClick,
-  onAddTicket 
+  onAddTicket
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
 
-  const ticketIds = tickets.map((t) => t.id);
+  // Memoize ticketIds to prevent SortableContext from re-computing
+  const ticketIds = useMemo(() => tickets.map((t) => t.id), [tickets]);
+
+  // Memoize click handler factory
+  const handleTicketClick = useCallback((ticket: Ticket) => {
+    onTicketClick?.(ticket);
+  }, [onTicketClick]);
 
   return (
     <div className="w-[300px] flex-shrink-0 flex flex-col max-h-full">
@@ -36,12 +52,12 @@ export function KanbanColumn({
             className="w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: column.color || '#71717a' }}
           />
-          
+
           {/* Title */}
           <h2 className="font-semibold text-sm text-zinc-100">
             {column.name}
           </h2>
-          
+
           {/* Count */}
           <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
             {tickets.length}
@@ -84,24 +100,18 @@ export function KanbanColumn({
         )}
       >
         <SortableContext items={ticketIds} strategy={verticalListSortingStrategy}>
-          <motion.div 
+          <motion.div
             className="flex flex-col gap-2"
             initial="hidden"
             animate="visible"
-            variants={{
-              hidden: { opacity: 0 },
-              visible: {
-                opacity: 1,
-                transition: { staggerChildren: 0.05 }
-              }
-            }}
+            variants={containerVariants}
           >
             <AnimatePresence mode="popLayout">
               {tickets.map((ticket) => (
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
-                  onClick={() => onTicketClick?.(ticket)}
+                  onClick={() => handleTicketClick(ticket)}
                 />
               ))}
             </AnimatePresence>
@@ -126,4 +136,4 @@ export function KanbanColumn({
       </div>
     </div>
   );
-}
+});
