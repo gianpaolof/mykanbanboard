@@ -16,6 +16,7 @@ import { useBoardStore } from '@/stores/boardStore';
 import { KanbanColumn } from './KanbanColumn';
 import { TicketCard } from './TicketCard';
 import { TicketModal } from './TicketModal';
+import { BoardSkeleton } from './BoardSkeleton';
 import type { Ticket } from '@/types';
 
 export const KanbanBoard = memo(function KanbanBoard() {
@@ -167,11 +168,7 @@ export const KanbanBoard = memo(function KanbanBoard() {
   }, []);
 
   if (!board) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-zinc-500">Loading board...</div>
-      </div>
-    );
+    return <BoardSkeleton />;
   }
 
   return (

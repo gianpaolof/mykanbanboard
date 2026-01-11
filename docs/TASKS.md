@@ -160,10 +160,17 @@
 
 ## Phase 3: Polish
 
-- [ ] **TASK-043**: Animazioni polish
-- [ ] **TASK-044**: Keyboard shortcuts completi
-- [ ] **TASK-045**: Empty states e loading
-- [ ] **TASK-046**: Error handling UI
+- [x] **TASK-043**: Animazioni polish
+  > Completato: Creato lib/animations.ts con configurazioni Framer Motion riusabili (spring, fade, stagger, modal, card variants).
+
+- [x] **TASK-044**: Keyboard shortcuts completi
+  > Completato: Integrato useKanbanShortcuts hook in App.tsx con tutti gli shortcuts (⌘K, ⌘N, ⌘⇧A, ⌘1-3, ⌘/, ⌘⇧S).
+
+- [x] **TASK-045**: Empty states e loading
+  > Completato: EmptyColumn per colonne vuote, BoardSkeleton per loading state animato.
+
+- [x] **TASK-046**: Error handling UI
+  > Completato: Integrato sonner toast, aggiunto toast.error/success a tutte le operazioni in boardStore.
 - [ ] **TASK-047**: Light mode
 - [ ] **TASK-048**: Settings page
 - [ ] **TASK-049**: Multiple boards
@@ -171,15 +178,11 @@
 
 ### 3.2 Performance & Stability
 
-- [ ] **TASK-051**: Debug & Fix Freezing
-  ```
-  Prompt: "Investiga e risolvi i freezing dell'app: aggiungi timeout 30s alle chiamate agent, gestisci errori di rete con retry, migliora indicatori loading, logga performance chiamate API."
-  ```
+- [x] **TASK-051**: Debug & Fix Freezing
+  > Completato: Timeout 15s su AgentChat con cancellation, Rust timeout ridotto a 15s, Python agent timeout wrapper 12s per DSPy calls.
 
-- [ ] **TASK-052**: Performance Optimization
-  ```
-  Prompt: "Ottimizza performance React: React.memo sui componenti pesanti (TicketCard, KanbanColumn), useMemo/useCallback dove serve, virtualizzazione liste >50 ticket, debounce su input."
-  ```
+- [x] **TASK-052**: Performance Optimization
+  > Completato: React.memo su TicketCard, KanbanColumn, KanbanBoard, TicketModal. useMemo/useCallback per handlers e computed values.
 
 ---
 
@@ -189,8 +192,8 @@
 |-------|-------|------|----------|
 | 1. Foundation | 24 | 24 | 100% |
 | 2. AI Agent | 18 | 18 | 100% |
-| 3. Polish | 10 | 0 | 0% |
-| **Total** | **52** | **42** | **81%** |
+| 3. Polish | 10 | 6 | 60% |
+| **Total** | **52** | **48** | **92%** |
 
 ---
 

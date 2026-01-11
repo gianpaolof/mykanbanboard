@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { AgentChat } from '@/components/ai/AgentChat';
+import { Toaster } from '@/components/ui/Toaster';
 import { useBoardStore } from '@/stores/boardStore';
+import { useKanbanShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 function App() {
   const loadBoard = useBoardStore((state) => state.loadBoard);
@@ -14,6 +17,10 @@ function App() {
   // UI State
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_currentView, setCurrentView] = useState<'board' | 'list' | 'timeline'>('board');
 
   // Count total tickets
   const ticketCount = Object.values(tickets).flat().length;
@@ -23,35 +30,9 @@ function App() {
     loadBoard();
   }, [loadBoard]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K - Command Palette
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      }
-
-      // Cmd/Ctrl + Shift + A - AI Panel
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'a') {
-        e.preventDefault();
-        setAiPanelOpen((prev) => !prev);
-      }
-
-      // Escape - Close modals
-      if (e.key === 'Escape') {
-        setCommandPaletteOpen(false);
-        setAiPanelOpen(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   // Handlers
   const handleCreateTicket = useCallback(() => {
-    console.log('Create ticket');
+    toast.info('Create ticket modal coming soon');
     // TODO: Open create ticket modal
   }, []);
 
@@ -61,8 +42,45 @@ function App() {
   }, []);
 
   const handleSwitchView = useCallback((view: 'board' | 'list' | 'timeline') => {
-    console.log('Switch to view:', view);
-    // TODO: Implement view switching
+    setCurrentView(view);
+    if (view !== 'board') {
+      toast.info(`${view.charAt(0).toUpperCase() + view.slice(1)} view coming soon`);
+    }
+  }, []);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
+  const handleDailySummary = useCallback(() => {
+    toast.info('Daily summary coming soon');
+  }, []);
+
+  const handleSettings = useCallback(() => {
+    toast.info('Settings coming soon');
+  }, []);
+
+  // Use centralized keyboard shortcuts hook
+  useKanbanShortcuts({
+    onToggleCommandPalette: () => setCommandPaletteOpen((prev) => !prev),
+    onCreateTicket: handleCreateTicket,
+    onOpenAI: () => setAiPanelOpen((prev) => !prev),
+    onDailySummary: handleDailySummary,
+    onSwitchView: handleSwitchView,
+    onOpenSettings: handleSettings,
+    onToggleSidebar: handleToggleSidebar,
+  });
+
+  // Handle escape to close modals (not handled by useKanbanShortcuts)
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setCommandPaletteOpen(false);
+        setAiPanelOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
   }, []);
 
 
@@ -91,7 +109,7 @@ function App() {
           lastUpdated="2m ago"
           onSearchClick={() => setCommandPaletteOpen(true)}
           onAIClick={() => setAiPanelOpen(true)}
-          onSettingsClick={() => console.log('Settings')}
+          onSettingsClick={handleSettings}
           onViewChange={handleSwitchView}
         />
 
@@ -115,6 +133,9 @@ function App() {
         isOpen={aiPanelOpen}
         onClose={() => setAiPanelOpen(false)}
       />
+
+      {/* Toast Notifications */}
+      <Toaster />
     </div>
   );
 }

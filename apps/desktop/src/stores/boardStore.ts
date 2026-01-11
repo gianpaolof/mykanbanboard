@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import type { Ticket, Column, Label, TicketCreate, TicketUpdate, ColumnCreate } from '@/types';
 import { api } from '@/lib/tauri';
 
@@ -81,11 +82,13 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       }));
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         columns: prevColumns,
         board: prevBoard,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error(`Failed to create column: ${errorMessage}`);
       throw error;
     }
   },
@@ -111,11 +114,13 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       await api.columns.updateColumn(id, updates);
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         columns: prevColumns,
         board: prevBoard,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error(`Failed to update column: ${errorMessage}`);
       throw error;
     }
   },
@@ -141,14 +146,17 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
 
     try {
       await api.columns.deleteColumn(id);
+      toast.success('Column deleted');
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         columns: prevColumns,
         board: prevBoard,
         tickets: prevTickets,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error(`Failed to delete column: ${errorMessage}`);
       throw error;
     }
   },
@@ -172,10 +180,12 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       await api.columns.reorderColumns(columnIds);
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         columns: prevColumns,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error(`Failed to reorder columns: ${errorMessage}`);
       throw error;
     }
   },
@@ -204,7 +214,9 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
 
       return newTicket;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      set({ error: errorMessage });
+      toast.error(`Failed to create ticket: ${errorMessage}`);
       throw error;
     }
   },
@@ -268,10 +280,12 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       });
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         tickets: prevTickets,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error(`Failed to update ticket: ${errorMessage}`);
       throw error;
     }
   },
@@ -290,12 +304,15 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
 
     try {
       await api.tickets.deleteTicket(id);
+      toast.success('Ticket deleted');
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         tickets: prevTickets,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error(`Failed to delete ticket: ${errorMessage}`);
       throw error;
     }
   },
@@ -338,10 +355,12 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
       await api.tickets.moveTicket(ticketId, targetColumnId, position);
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         tickets: prevTickets,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error('Failed to move ticket. Changes reverted.');
       throw error;
     }
   },
@@ -364,7 +383,9 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
 
       return newLabel;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      set({ error: errorMessage });
+      toast.error(`Failed to create label: ${errorMessage}`);
       throw error;
     }
   },
@@ -390,13 +411,16 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
 
     try {
       await api.labels.deleteLabel(id);
+      toast.success('Label deleted');
     } catch (error) {
       // Rollback on error
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
         labels: prevLabels,
         tickets: prevTickets,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
+      toast.error(`Failed to delete label: ${errorMessage}`);
       throw error;
     }
   },
@@ -448,10 +472,12 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       set({
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
         isLoading: false,
       });
+      toast.error(`Failed to load board: ${errorMessage}`);
     }
   },
 }));

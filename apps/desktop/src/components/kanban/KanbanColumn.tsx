@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Plus, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TicketCard } from './TicketCard';
+import { EmptyColumn } from './EmptyColumn';
 import type { Column, Ticket } from '@/types';
 
 interface KanbanColumnProps {
@@ -100,39 +101,45 @@ export const KanbanColumn = memo(function KanbanColumn({
         )}
       >
         <SortableContext items={ticketIds} strategy={verticalListSortingStrategy}>
-          <motion.div
-            className="flex flex-col gap-2"
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-          >
-            <AnimatePresence mode="popLayout">
-              {tickets.map((ticket) => (
-                <TicketCard
-                  key={ticket.id}
-                  ticket={ticket}
-                  onClick={() => handleTicketClick(ticket)}
-                />
-              ))}
-            </AnimatePresence>
-          </motion.div>
+          {tickets.length === 0 ? (
+            <EmptyColumn columnName={column.name} onAddTicket={onAddTicket} />
+          ) : (
+            <motion.div
+              className="flex flex-col gap-2"
+              initial="hidden"
+              animate="visible"
+              variants={containerVariants}
+            >
+              <AnimatePresence mode="popLayout">
+                {tickets.map((ticket) => (
+                  <TicketCard
+                    key={ticket.id}
+                    ticket={ticket}
+                    onClick={() => handleTicketClick(ticket)}
+                  />
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
         </SortableContext>
 
-        {/* Add Ticket Button */}
-        <button
-          onClick={onAddTicket}
-          className={cn(
-            'w-full mt-2 py-2 px-3',
-            'flex items-center gap-2',
-            'rounded-lg border border-dashed border-zinc-700',
-            'text-zinc-500 text-sm',
-            'hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-500/10',
-            'transition-all duration-200'
-          )}
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add ticket</span>
-        </button>
+        {/* Add Ticket Button - only show when there are tickets */}
+        {tickets.length > 0 && (
+          <button
+            onClick={onAddTicket}
+            className={cn(
+              'w-full mt-2 py-2 px-3',
+              'flex items-center gap-2',
+              'rounded-lg border border-dashed border-zinc-700',
+              'text-zinc-500 text-sm',
+              'hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-500/10',
+              'transition-all duration-200'
+            )}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add ticket</span>
+          </button>
+        )}
       </div>
     </div>
   );
