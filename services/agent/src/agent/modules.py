@@ -3,6 +3,32 @@
 from typing import Literal
 import dspy
 
+# ============================================================================
+# VALID VALUES (used for assertions)
+# ============================================================================
+
+VALID_PRIORITIES = ("low", "medium", "high", "critical")
+VALID_EFFORTS = ("xs", "s", "m", "l", "xl")
+VALID_ACTIONS = ("create", "update", "move", "search", "summarize", "decompose", "none")
+VALID_TRIGGER_TYPES = (
+    "ticket_created",
+    "ticket_moved",
+    "ticket_updated",
+    "label_added",
+    "label_removed",
+    "due_date_approaching",
+    "priority_changed",
+)
+VALID_ACTION_TYPES = (
+    "move_ticket",
+    "set_priority",
+    "add_label",
+    "remove_label",
+    "set_due_date",
+    "notify",
+    "auto_triage",
+)
+
 
 # ============================================================================
 # TRIAGE MODULE
@@ -69,6 +95,31 @@ class TriageModule(dspy.Module):
             description=description,
             existing_labels=existing_labels,
         )
+
+        # Hard constraints - will retry automatically if failed
+        dspy.Assert(
+            result.priority in VALID_PRIORITIES,
+            f"Priority '{result.priority}' is invalid. Must be one of: {VALID_PRIORITIES}",
+        )
+        dspy.Assert(
+            result.effort_estimate in VALID_EFFORTS,
+            f"Effort '{result.effort_estimate}' is invalid. Must be one of: {VALID_EFFORTS}",
+        )
+        dspy.Assert(
+            isinstance(result.labels, list),
+            "Labels must be a list of strings",
+        )
+
+        # Soft constraints - will log warning but continue
+        dspy.Suggest(
+            len(result.labels) <= 3,
+            f"Too many labels ({len(result.labels)}). Prefer max 3 labels for clarity.",
+        )
+        dspy.Suggest(
+            len(result.reasoning) >= 20,
+            "Reasoning should be more detailed to explain the triage decision.",
+        )
+
         return result
 
 
@@ -128,6 +179,49 @@ class DecomposeModule(dspy.Module):
             description=description,
             context=context or "No additional context",
         )
+
+        # Hard constraints
+        dspy.Assert(
+            isinstance(result.subtasks, list),
+            "Subtasks must be a list",
+        )
+        dspy.Assert(
+            len(result.subtasks) >= 2,
+            f"Must generate at least 2 subtasks, got {len(result.subtasks)}",
+        )
+        dspy.Assert(
+            len(result.subtasks) <= 10,
+            f"Too many subtasks ({len(result.subtasks)}). Maximum is 10.",
+        )
+
+        # Validate each subtask structure
+        for i, subtask in enumerate(result.subtasks):
+            dspy.Assert(
+                isinstance(subtask, dict) and "title" in subtask,
+                f"Subtask {i} must be a dict with at least a 'title' key",
+            )
+            if "effort" in subtask:
+                dspy.Assert(
+                    subtask["effort"] in VALID_EFFORTS,
+                    f"Subtask {i} effort '{subtask.get('effort')}' is invalid",
+                )
+
+        # Validate dependencies
+        dspy.Assert(
+            isinstance(result.dependencies, list),
+            "Dependencies must be a list of tuples",
+        )
+
+        # Soft constraints
+        dspy.Suggest(
+            3 <= len(result.subtasks) <= 7,
+            f"Optimal subtask count is 3-7, got {len(result.subtasks)}",
+        )
+        dspy.Suggest(
+            len(result.reasoning) >= 30,
+            "Reasoning should explain the decomposition strategy in more detail.",
+        )
+
         return result
 
 
@@ -203,6 +297,39 @@ class DailySummaryModule(dspy.Module):
             due_soon=due_soon,
             recently_completed=recently_completed or [],
         )
+
+        # Hard constraints
+        dspy.Assert(
+            isinstance(result.focus_today, list),
+            "focus_today must be a list of strings",
+        )
+        dspy.Assert(
+            len(result.focus_today) <= 3,
+            f"focus_today must have max 3 items, got {len(result.focus_today)}",
+        )
+        dspy.Assert(
+            isinstance(result.blockers, list),
+            "blockers must be a list of strings",
+        )
+        dspy.Assert(
+            isinstance(result.quick_wins, list),
+            "quick_wins must be a list of strings",
+        )
+        dspy.Assert(
+            len(result.greeting) >= 5,
+            "Greeting must be at least 5 characters",
+        )
+
+        # Soft constraints
+        dspy.Suggest(
+            len(result.focus_today) >= 1,
+            "Should provide at least 1 focus area for today",
+        )
+        dspy.Suggest(
+            len(result.greeting) <= 100,
+            "Greeting should be concise (under 100 chars)",
+        )
+
         return result
 
 
@@ -269,6 +396,39 @@ class ActionDeciderModule(dspy.Module):
             user_message=user_message,
             current_context=current_context,
         )
+
+        # Hard constraints
+        dspy.Assert(
+            result.action in VALID_ACTIONS,
+            f"Action '{result.action}' is invalid. Must be one of: {VALID_ACTIONS}",
+        )
+        dspy.Assert(
+            isinstance(result.params, dict),
+            "Action params must be a dictionary",
+        )
+        dspy.Assert(
+            len(result.response) >= 5,
+            "Response must be at least 5 characters",
+        )
+
+        # Validate params based on action type
+        if result.action == "create":
+            dspy.Assert(
+                "title" in result.params,
+                "Create action requires 'title' in params",
+            )
+        elif result.action == "move":
+            dspy.Assert(
+                "ticket_id" in result.params or "column" in result.params,
+                "Move action requires 'ticket_id' or 'column' in params",
+            )
+
+        # Soft constraints
+        dspy.Suggest(
+            len(result.response) <= 500,
+            "Response should be concise (under 500 chars)",
+        )
+
         return result
 
 
@@ -368,4 +528,63 @@ class RuleParserModule(dspy.Module):
             natural_language=natural_language,
             board_context=board_context or {},
         )
+
+        # Hard constraints
+        dspy.Assert(
+            result.trigger_type in VALID_TRIGGER_TYPES,
+            f"Trigger type '{result.trigger_type}' is invalid. Must be one of: {VALID_TRIGGER_TYPES}",
+        )
+        dspy.Assert(
+            result.action_type in VALID_ACTION_TYPES,
+            f"Action type '{result.action_type}' is invalid. Must be one of: {VALID_ACTION_TYPES}",
+        )
+        dspy.Assert(
+            isinstance(result.trigger_config, dict),
+            "Trigger config must be a dictionary",
+        )
+        dspy.Assert(
+            isinstance(result.action_config, dict),
+            "Action config must be a dictionary",
+        )
+        dspy.Assert(
+            len(result.rule_name) <= 50,
+            f"Rule name too long ({len(result.rule_name)} chars). Maximum is 50.",
+        )
+
+        # Validate confidence is a valid float
+        try:
+            confidence = float(result.confidence)
+            dspy.Assert(
+                0.0 <= confidence <= 1.0,
+                f"Confidence {confidence} must be between 0.0 and 1.0",
+            )
+        except (TypeError, ValueError):
+            dspy.Assert(
+                False,
+                f"Confidence must be a number, got: {result.confidence}",
+            )
+
+        # Validate action config based on action type
+        if result.action_type == "set_priority":
+            priority = result.action_config.get("priority")
+            dspy.Assert(
+                priority is None or priority in VALID_PRIORITIES,
+                f"Invalid priority '{priority}' in action config",
+            )
+        elif result.action_type in ("add_label", "remove_label"):
+            dspy.Assert(
+                "label_name" in result.action_config or "label" in result.action_config,
+                f"{result.action_type} requires 'label_name' or 'label' in action_config",
+            )
+
+        # Soft constraints
+        dspy.Suggest(
+            float(result.confidence) >= 0.7,
+            f"Low confidence ({result.confidence}). Consider asking for clarification.",
+        )
+        dspy.Suggest(
+            len(result.explanation) >= 20,
+            "Explanation should be more detailed.",
+        )
+
         return result
