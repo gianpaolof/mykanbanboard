@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { AgentChat } from '@/components/ai/AgentChat';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Toaster } from '@/components/ui/Toaster';
 import { useBoardStore } from '@/stores/boardStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -18,6 +19,7 @@ function App() {
   // UI State
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -65,7 +67,7 @@ function App() {
   }, []);
 
   const handleSettings = useCallback(() => {
-    toast.info('Settings coming soon');
+    setSettingsOpen(true);
   }, []);
 
   // Use centralized keyboard shortcuts hook
@@ -85,6 +87,7 @@ function App() {
       if (e.key === 'Escape') {
         setCommandPaletteOpen(false);
         setAiPanelOpen(false);
+        setSettingsOpen(false);
       }
     };
     window.addEventListener('keydown', handleEscape);
@@ -140,6 +143,12 @@ function App() {
       <AgentChat
         isOpen={aiPanelOpen}
         onClose={() => setAiPanelOpen(false)}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
       />
 
       {/* Toast Notifications */}
