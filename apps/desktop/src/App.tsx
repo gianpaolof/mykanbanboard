@@ -7,6 +7,7 @@ import { CommandPalette } from '@/components/layout/CommandPalette';
 import { AgentChat } from '@/components/ai/AgentChat';
 import { Toaster } from '@/components/ui/Toaster';
 import { useBoardStore } from '@/stores/boardStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { useKanbanShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 function App() {
@@ -24,6 +25,13 @@ function App() {
 
   // Count total tickets
   const ticketCount = Object.values(tickets).flat().length;
+
+  // Initialize theme on mount
+  const initializeTheme = useThemeStore((state) => state.initializeTheme);
+
+  useEffect(() => {
+    initializeTheme();
+  }, [initializeTheme]);
 
   // Load board on mount
   useEffect(() => {
@@ -89,7 +97,7 @@ function App() {
       <div className="h-screen w-screen flex items-center justify-center bg-bg-primary">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <div className="text-zinc-500 text-sm">Loading board...</div>
+          <div className="text-text-tertiary text-sm">Loading board...</div>
         </div>
       </div>
     );

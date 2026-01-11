@@ -22,12 +22,12 @@ const priorityColors = {
 } as const;
 
 const labelColors: Record<string, string> = {
-  red: 'bg-red-500/15 text-red-300',
-  blue: 'bg-blue-500/15 text-blue-300',
-  green: 'bg-green-500/15 text-green-300',
-  yellow: 'bg-yellow-500/15 text-yellow-300',
-  purple: 'bg-purple-500/15 text-purple-300',
-  pink: 'bg-pink-500/15 text-pink-300',
+  red: 'bg-red-500/15 text-red-600 dark:text-red-300',
+  blue: 'bg-blue-500/15 text-blue-600 dark:text-blue-300',
+  green: 'bg-green-500/15 text-green-600 dark:text-green-300',
+  yellow: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-300',
+  purple: 'bg-purple-500/15 text-purple-600 dark:text-purple-300',
+  pink: 'bg-pink-500/15 text-pink-600 dark:text-pink-300',
 };
 
 // Date formatter singleton - avoid recreation
@@ -81,16 +81,16 @@ export const TicketCard = memo(function TicketCard({
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       className={cn(
-        // Glass effect
-        'bg-white/[0.04] backdrop-blur-xl',
-        'border border-white/[0.08]',
+        // Glass effect - theme aware
+        'bg-glass-bg backdrop-blur-xl',
+        'border border-glass-border',
         'rounded-xl p-3',
         // Interaction
         'cursor-grab active:cursor-grabbing',
         'transition-all duration-200',
-        // Hover
-        'hover:bg-white/[0.07] hover:border-white/[0.12]',
-        'hover:shadow-lg hover:shadow-black/20',
+        // Hover - uses CSS variable via card:hover in globals.css
+        'hover:bg-[var(--card-hover-bg)] hover:border-[var(--card-hover-border)]',
+        'hover:shadow-lg hover:shadow-[var(--card-shadow)]',
         // Dragging
         isDragging && 'opacity-50 scale-105 shadow-xl',
       )}
@@ -116,7 +116,7 @@ export const TicketCard = memo(function TicketCard({
                 className={cn(
                   'text-[10px] font-semibold uppercase tracking-wide',
                   'px-1.5 py-0.5 rounded',
-                  labelColors[label.color] || 'bg-zinc-500/15 text-zinc-300'
+                  labelColors[label.color] || 'bg-zinc-500/15 text-text-tertiary'
                 )}
               >
                 {label.name}
@@ -127,17 +127,17 @@ export const TicketCard = memo(function TicketCard({
       </div>
 
       {/* Title */}
-      <h3 className="font-semibold text-sm leading-snug mb-3 text-zinc-100">
+      <h3 className="font-semibold text-sm leading-snug mb-3 text-text-primary">
         {ticket.title}
       </h3>
 
       {/* Footer: Meta + Effort */}
-      <div className="flex items-center justify-between text-xs text-zinc-500">
+      <div className="flex items-center justify-between text-xs text-text-tertiary">
         <div className="flex items-center gap-3">
           {ticket.dueDate && (
             <span className={cn(
               'flex items-center gap-1',
-              isOverdue && 'text-red-400'
+              isOverdue && 'text-red-500 dark:text-red-400'
             )}>
               {isOverdue ? (
                 <AlertCircle className="w-3 h-3" />
@@ -157,7 +157,7 @@ export const TicketCard = memo(function TicketCard({
         </div>
 
         {ticket.effort && (
-          <span className="font-mono text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
+          <span className="font-mono text-[10px] bg-bg-tertiary px-1.5 py-0.5 rounded text-text-tertiary">
             {ticket.effort.toUpperCase()}
           </span>
         )}

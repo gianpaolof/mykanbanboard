@@ -5,6 +5,96 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
+  /* ========================================= */
+  /* LIGHT MODE (DEFAULT) */
+  /* ========================================= */
+  :root {
+    /* Backgrounds */
+    --bg-primary: #fafafa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f4f4f5;
+    --bg-elevated: rgba(0, 0, 0, 0.02);
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --bg-active: rgba(0, 0, 0, 0.08);
+
+    /* Glass effects */
+    --glass-bg: rgba(0, 0, 0, 0.02);
+    --glass-border: rgba(0, 0, 0, 0.08);
+
+    /* Text */
+    --text-primary: #18181b;
+    --text-secondary: #52525b;
+    --text-tertiary: #71717a;
+    --text-muted: #a1a1aa;
+
+    /* Borders */
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-default: rgba(0, 0, 0, 0.1);
+    --border-strong: rgba(0, 0, 0, 0.15);
+
+    /* Scrollbar */
+    --scrollbar-thumb: rgba(0, 0, 0, 0.1);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+
+    /* Selection */
+    --selection-bg: rgba(99, 102, 241, 0.2);
+    --selection-text: #18181b;
+
+    /* Sidebar */
+    --sidebar-bg: #f4f4f5;
+    --sidebar-border: rgba(0, 0, 0, 0.08);
+
+    /* Card hover */
+    --card-hover-bg: rgba(0, 0, 0, 0.04);
+    --card-hover-border: rgba(0, 0, 0, 0.12);
+    --card-shadow: rgba(0, 0, 0, 0.08);
+  }
+
+  /* ========================================= */
+  /* DARK MODE */
+  /* ========================================= */
+  .dark {
+    /* Backgrounds */
+    --bg-primary: #0a0a0b;
+    --bg-secondary: #141415;
+    --bg-tertiary: #1c1c1e;
+    --bg-elevated: rgba(255, 255, 255, 0.03);
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-active: rgba(255, 255, 255, 0.08);
+
+    /* Glass effects */
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.06);
+
+    /* Text */
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
+    --text-muted: #52525b;
+
+    /* Borders */
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-default: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.15);
+
+    /* Scrollbar */
+    --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+
+    /* Selection */
+    --selection-bg: rgba(99, 102, 241, 0.3);
+    --selection-text: #ffffff;
+
+    /* Sidebar */
+    --sidebar-bg: #18181b;
+    --sidebar-border: rgba(255, 255, 255, 0.06);
+
+    /* Card hover */
+    --card-hover-bg: rgba(255, 255, 255, 0.07);
+    --card-hover-border: rgba(255, 255, 255, 0.12);
+    --card-shadow: rgba(0, 0, 0, 0.3);
+  }
+
   * {
     @apply border-border;
   }
@@ -16,13 +106,15 @@
   }
 
   body {
-    @apply bg-bg-primary text-zinc-100 font-sans;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply font-sans;
     line-height: 1.5;
     min-height: 100vh;
     overflow: hidden;
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar - uses CSS variables */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -33,30 +125,34 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/10 rounded-full;
+    background: var(--scrollbar-thumb);
+    @apply rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-white/20;
+    background: var(--scrollbar-thumb-hover);
   }
 
-  /* Selection */
+  /* Selection - uses CSS variables */
   ::selection {
-    @apply bg-accent/30 text-white;
+    background: var(--selection-bg);
+    color: var(--selection-text);
   }
 }
 
 @layer components {
   /* Glass effect */
   .glass {
-    @apply bg-glass-bg backdrop-blur-xl border border-glass-border;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    @apply backdrop-blur-xl;
   }
 
   .glass-hover {
     @apply hover:bg-bg-hover transition-colors duration-150;
   }
 
-  /* Priority dots with glow */
+  /* Priority dots with glow - semantic colors work in both modes */
   .priority-critical {
     @apply bg-priority-critical shadow-[0_0_8px] shadow-priority-critical/50;
   }
@@ -85,12 +181,18 @@
   }
 
   .btn-secondary {
-    @apply bg-bg-tertiary text-zinc-100 border border-border-subtle;
+    @apply bg-bg-tertiary border border-border-subtle;
+    color: var(--text-primary);
     @apply hover:bg-bg-hover hover:border-border;
   }
 
   .btn-ghost {
-    @apply bg-transparent text-zinc-400 hover:bg-bg-hover hover:text-zinc-200;
+    color: var(--text-tertiary);
+    @apply bg-transparent hover:bg-bg-hover;
+  }
+
+  .btn-ghost:hover {
+    color: var(--text-secondary);
   }
 
   .btn-danger {
@@ -105,64 +207,77 @@
   /* Input styles */
   .input {
     @apply w-full px-3 py-2 bg-bg-tertiary border border-border-subtle rounded-lg;
-    @apply text-sm text-zinc-100 placeholder:text-zinc-500;
+    @apply text-sm placeholder:text-text-muted;
+    color: var(--text-primary);
     @apply focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent;
     @apply transition-all duration-200;
   }
 
-  /* Card styles */
+  /* Card styles - uses CSS variables for theme adaptation */
   .card {
-    @apply bg-glass-bg backdrop-blur-xl border border-glass-border rounded-xl p-3;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    @apply backdrop-blur-xl rounded-xl p-3;
     @apply transition-all duration-200;
-    @apply hover:bg-[rgba(255,255,255,0.07)] hover:border-[rgba(255,255,255,0.12)];
-    @apply hover:shadow-lg hover:shadow-black/20;
   }
 
-  /* Label colors */
+  .card:hover {
+    background: var(--card-hover-bg);
+    border-color: var(--card-hover-border);
+    box-shadow: 0 10px 15px -3px var(--card-shadow);
+  }
+
+  /* Label colors - work in both modes */
   .label-red {
-    @apply bg-red-500/15 text-red-300;
+    @apply bg-red-500/15 text-red-600 dark:text-red-300;
   }
 
   .label-blue {
-    @apply bg-blue-500/15 text-blue-300;
+    @apply bg-blue-500/15 text-blue-600 dark:text-blue-300;
   }
 
   .label-green {
-    @apply bg-green-500/15 text-green-300;
+    @apply bg-green-500/15 text-green-600 dark:text-green-300;
   }
 
   .label-yellow {
-    @apply bg-yellow-500/15 text-yellow-300;
+    @apply bg-yellow-500/15 text-yellow-600 dark:text-yellow-300;
   }
 
   .label-purple {
-    @apply bg-purple-500/15 text-purple-300;
+    @apply bg-purple-500/15 text-purple-600 dark:text-purple-300;
   }
 
   .label-pink {
-    @apply bg-pink-500/15 text-pink-300;
+    @apply bg-pink-500/15 text-pink-600 dark:text-pink-300;
   }
 
   .label-orange {
-    @apply bg-orange-500/15 text-orange-300;
+    @apply bg-orange-500/15 text-orange-600 dark:text-orange-300;
   }
 
   /* Nav item styles */
   .nav-item {
     @apply flex items-center gap-2.5 px-2.5 py-2 rounded-md;
-    @apply text-sm font-medium text-zinc-400;
-    @apply hover:bg-[rgba(255,255,255,0.05)] hover:text-zinc-300;
+    @apply text-sm font-medium;
+    color: var(--text-tertiary);
+    @apply hover:bg-bg-hover;
     @apply transition-colors duration-150;
   }
 
+  .nav-item:hover {
+    color: var(--text-secondary);
+  }
+
   .nav-item.active {
-    @apply bg-[rgba(99,102,241,0.15)] text-indigo-400;
+    @apply bg-[rgba(99,102,241,0.15)] text-indigo-500 dark:text-indigo-400;
   }
 
   /* Keyboard shortcuts */
   .kbd {
     @apply font-mono text-2xs bg-bg-tertiary px-1.5 py-0.5 rounded;
-    @apply border border-border-subtle text-zinc-400;
+    @apply border border-border-subtle;
+    color: var(--text-tertiary);
   }
 }
 

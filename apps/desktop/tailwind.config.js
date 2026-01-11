@@ -8,45 +8,57 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Backgrounds
+        // Backgrounds - using CSS variables for theme support
         bg: {
-          primary: '#0a0a0b',
-          secondary: '#141415',
-          tertiary: '#1c1c1e',
-          elevated: 'rgba(255, 255, 255, 0.03)',
-          hover: 'rgba(255, 255, 255, 0.05)',
-          active: 'rgba(255, 255, 255, 0.08)',
+          primary: 'var(--bg-primary)',
+          secondary: 'var(--bg-secondary)',
+          tertiary: 'var(--bg-tertiary)',
+          elevated: 'var(--bg-elevated)',
+          hover: 'var(--bg-hover)',
+          active: 'var(--bg-active)',
         },
-        // Glass
+        // Glass effects
         glass: {
-          bg: 'rgba(255, 255, 255, 0.03)',
-          border: 'rgba(255, 255, 255, 0.06)',
+          bg: 'var(--glass-bg)',
+          border: 'var(--glass-border)',
         },
-        // Accent
+        // Text colors
+        text: {
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
+          muted: 'var(--text-muted)',
+        },
+        // Borders
+        border: {
+          subtle: 'var(--border-subtle)',
+          DEFAULT: 'var(--border-default)',
+          strong: 'var(--border-strong)',
+        },
+        // Sidebar
+        sidebar: {
+          bg: 'var(--sidebar-bg)',
+          border: 'var(--sidebar-border)',
+        },
+        // Accent (unchanged - works in both modes)
         accent: {
           DEFAULT: '#6366f1',
           hover: '#818cf8',
           muted: 'rgba(99, 102, 241, 0.15)',
         },
-        // Status
+        // Status (unchanged - semantic colors)
         status: {
           success: '#22c55e',
           warning: '#eab308',
           error: '#ef4444',
           info: '#3b82f6',
         },
-        // Priority
+        // Priority (unchanged - semantic colors)
         priority: {
           critical: '#ef4444',
           high: '#f97316',
           medium: '#eab308',
           low: '#22c55e',
-        },
-        // Borders
-        border: {
-          subtle: 'rgba(255, 255, 255, 0.06)',
-          DEFAULT: 'rgba(255, 255, 255, 0.1)',
-          strong: 'rgba(255, 255, 255, 0.15)',
         },
       },
       fontFamily: {

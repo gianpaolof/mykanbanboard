@@ -55,12 +55,12 @@ export const KanbanColumn = memo(function KanbanColumn({
           />
 
           {/* Title */}
-          <h2 className="font-semibold text-sm text-zinc-100">
+          <h2 className="font-semibold text-sm text-text-primary">
             {column.name}
           </h2>
 
           {/* Count */}
-          <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
+          <span className="text-xs text-text-tertiary bg-bg-tertiary px-2 py-0.5 rounded">
             {tickets.length}
             {column.wipLimit && `/${column.wipLimit}`}
           </span>
@@ -72,7 +72,7 @@ export const KanbanColumn = memo(function KanbanColumn({
             onClick={onAddTicket}
             className={cn(
               'w-6 h-6 rounded flex items-center justify-center',
-              'text-zinc-500 hover:text-zinc-100 hover:bg-white/5',
+              'text-text-tertiary hover:text-text-primary hover:bg-bg-hover',
               'transition-colors'
             )}
           >
@@ -81,7 +81,7 @@ export const KanbanColumn = memo(function KanbanColumn({
           <button
             className={cn(
               'w-6 h-6 rounded flex items-center justify-center',
-              'text-zinc-500 hover:text-zinc-100 hover:bg-white/5',
+              'text-text-tertiary hover:text-text-primary hover:bg-bg-hover',
               'transition-colors'
             )}
           >
@@ -130,9 +130,9 @@ export const KanbanColumn = memo(function KanbanColumn({
             className={cn(
               'w-full mt-2 py-2 px-3',
               'flex items-center gap-2',
-              'rounded-lg border border-dashed border-zinc-700',
-              'text-zinc-500 text-sm',
-              'hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-500/10',
+              'rounded-lg border border-dashed border-border-strong',
+              'text-text-tertiary text-sm',
+              'hover:border-accent hover:text-accent hover:bg-accent-muted',
               'transition-all duration-200'
             )}
           >

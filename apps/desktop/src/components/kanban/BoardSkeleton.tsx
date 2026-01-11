@@ -21,15 +21,15 @@ const SkeletonCard = memo(function SkeletonCard({
       }}
       className={cn(
         'rounded-xl p-3 h-24',
-        'bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.04)]'
+        'bg-glass-bg border border-glass-border'
       )}
     >
       {/* Title placeholder */}
-      <div className="h-4 w-3/4 bg-zinc-800/50 rounded mb-3" />
+      <div className="h-4 w-3/4 bg-bg-tertiary rounded mb-3" />
       {/* Labels placeholder */}
       <div className="flex gap-1.5">
-        <div className="h-3 w-12 bg-zinc-800/50 rounded" />
-        <div className="h-3 w-16 bg-zinc-800/50 rounded" />
+        <div className="h-3 w-12 bg-bg-tertiary rounded" />
+        <div className="h-3 w-16 bg-bg-tertiary rounded" />
       </div>
     </motion.div>
   );
@@ -54,7 +54,7 @@ const SkeletonColumn = memo(function SkeletonColumn({
             delay: columnIndex * 0.1,
             ease: 'easeInOut',
           }}
-          className="w-2.5 h-2.5 rounded-full bg-zinc-800"
+          className="w-2.5 h-2.5 rounded-full bg-bg-tertiary"
         />
         <motion.div
           animate={{ opacity: [0.5, 0.8, 0.5] }}
@@ -64,7 +64,7 @@ const SkeletonColumn = memo(function SkeletonColumn({
             delay: columnIndex * 0.1 + 0.05,
             ease: 'easeInOut',
           }}
-          className="h-4 w-24 bg-zinc-800 rounded"
+          className="h-4 w-24 bg-bg-tertiary rounded"
         />
         <motion.div
           animate={{ opacity: [0.5, 0.8, 0.5] }}
@@ -74,7 +74,7 @@ const SkeletonColumn = memo(function SkeletonColumn({
             delay: columnIndex * 0.1 + 0.1,
             ease: 'easeInOut',
           }}
-          className="h-4 w-8 bg-zinc-800 rounded"
+          className="h-4 w-8 bg-bg-tertiary rounded"
         />
       </div>
 

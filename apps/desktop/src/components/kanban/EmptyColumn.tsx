@@ -25,18 +25,18 @@ export const EmptyColumn = memo(function EmptyColumn({
       <div
         className={cn(
           'w-16 h-16 rounded-2xl flex items-center justify-center mb-4',
-          'bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]',
+          'bg-glass-bg border border-glass-border',
           'backdrop-blur-xl'
         )}
       >
-        <Inbox className="w-8 h-8 text-zinc-600" />
+        <Inbox className="w-8 h-8 text-text-muted" />
       </div>
 
       {/* Message */}
-      <h3 className="text-sm font-medium text-zinc-400 mb-1">
+      <h3 className="text-sm font-medium text-text-secondary mb-1">
         No tickets in {columnName}
       </h3>
-      <p className="text-xs text-zinc-600 max-w-[200px] mb-4">
+      <p className="text-xs text-text-muted max-w-[200px] mb-4">
         Drag tickets here or click the button below to add one
       </p>
 
@@ -46,8 +46,8 @@ export const EmptyColumn = memo(function EmptyColumn({
           onClick={onAddTicket}
           className={cn(
             'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium',
-            'bg-[rgba(255,255,255,0.05)] text-zinc-400',
-            'hover:bg-[rgba(255,255,255,0.08)] hover:text-zinc-300',
+            'bg-bg-hover text-text-tertiary',
+            'hover:bg-bg-active hover:text-text-secondary',
             'transition-colors'
           )}
         >

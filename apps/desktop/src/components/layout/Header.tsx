@@ -9,6 +9,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 type ViewMode = 'board' | 'list' | 'timeline';
 
@@ -63,10 +64,10 @@ export function Header({
     >
       {/* Left: Board Info */}
       <div className="flex items-center gap-3 min-w-0 flex-shrink">
-        <h1 className="text-base font-semibold text-zinc-100 truncate">
+        <h1 className="text-base font-semibold text-text-primary truncate">
           {boardTitle}
         </h1>
-        <span className="text-xs text-zinc-500 whitespace-nowrap">
+        <span className="text-xs text-text-tertiary whitespace-nowrap">
           {ticketCount} tickets · Updated {lastUpdated}
         </span>
       </div>
@@ -82,7 +83,7 @@ export function Header({
             'bg-bg-elevated rounded-lg',
             'border border-border-subtle',
             // Text
-            'text-sm text-zinc-500',
+            'text-sm text-text-tertiary',
             // Interaction
             'transition-all duration-200',
             'hover:border-border-DEFAULT hover:bg-bg-hover',
@@ -95,7 +96,7 @@ export function Header({
             className={cn(
               'px-1.5 py-0.5 rounded',
               'bg-bg-tertiary border border-border-subtle',
-              'text-2xs font-mono text-zinc-400',
+              'text-2xs font-mono text-text-tertiary',
               'flex items-center gap-0.5'
             )}
           >
@@ -126,8 +127,8 @@ export function Header({
                 'transition-all duration-200',
                 // Active state
                 activeView === id
-                  ? 'bg-bg-active text-zinc-100 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-bg-hover'
+                  ? 'bg-bg-active text-text-primary shadow-sm'
+                  : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover'
               )}
               aria-label={label}
               aria-pressed={activeView === id}
@@ -137,6 +138,9 @@ export function Header({
             </button>
           ))}
         </div>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* AI Button */}
         <button
@@ -188,10 +192,10 @@ export function Header({
             'flex items-center justify-center w-8 h-8 rounded-lg',
             // Styling
             'bg-bg-elevated border border-border-subtle',
-            'text-zinc-400',
+            'text-text-tertiary',
             // Interaction
             'transition-all duration-200',
-            'hover:bg-bg-hover hover:text-zinc-200 hover:border-border-DEFAULT',
+            'hover:bg-bg-hover hover:text-text-secondary hover:border-border-DEFAULT',
             'active:bg-bg-active',
             // Focus
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:border-accent'
