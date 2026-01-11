@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { CreateTicketModal } from '@/components/kanban/CreateTicketModal';
@@ -8,9 +8,10 @@ import { CommandPalette } from '@/components/layout/CommandPalette';
 import { AgentChat } from '@/components/ai/AgentChat';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Toaster } from '@/components/ui/Toaster';
-import { useBoardStore } from '@/stores/boardStore';
+import { useBoardStore, filterTickets } from '@/stores/boardStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useKanbanShortcuts } from '@/hooks/useKeyboardShortcuts';
+import type { FilterConfig } from '@/types';
 
 function App() {
   const loadBoard = useBoardStore((state) => state.loadBoard);
@@ -27,8 +28,15 @@ function App() {
   const [_sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_currentView, setCurrentView] = useState<'board' | 'list' | 'timeline'>('board');
+  const [filter, setFilter] = useState<FilterConfig>({});
 
-  // Count total tickets
+  // Apply filtering to tickets
+  const filteredTickets = useMemo(
+    () => filterTickets(tickets, filter),
+    [tickets, filter]
+  );
+
+  // Count total tickets (from filtered)
   const ticketCount = Object.values(tickets).flat().length;
 
   // Initialize theme on mount
@@ -71,6 +79,10 @@ function App() {
 
   const handleSettings = useCallback(() => {
     setSettingsOpen(true);
+  }, []);
+
+  const handleFilterChange = useCallback((newFilter: FilterConfig) => {
+    setFilter(newFilter);
   }, []);
 
   // Use centralized keyboard shortcuts hook
@@ -122,15 +134,19 @@ function App() {
           boardTitle="My Project"
           ticketCount={ticketCount}
           lastUpdated="2m ago"
-          onSearchClick={() => setCommandPaletteOpen(true)}
           onAIClick={() => setAiPanelOpen(true)}
           onSettingsClick={handleSettings}
           onViewChange={handleSwitchView}
+          filter={filter}
+          onFilterChange={handleFilterChange}
         />
 
         {/* Board */}
         <main className="flex-1 overflow-hidden">
-          <KanbanBoard onAddTicket={handleCreateTicket} />
+          <KanbanBoard
+            onAddTicket={handleCreateTicket}
+            filteredTickets={filteredTickets}
+          />
         </main>
       </div>
 

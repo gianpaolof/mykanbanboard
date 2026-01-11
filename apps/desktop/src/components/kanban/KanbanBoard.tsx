@@ -21,10 +21,14 @@ import type { Ticket } from '@/types';
 
 interface KanbanBoardProps {
   onAddTicket?: (columnId: string) => void;
+  filteredTickets?: Record<string, Ticket[]>;
 }
 
-export const KanbanBoard = memo(function KanbanBoard({ onAddTicket }: KanbanBoardProps) {
+export const KanbanBoard = memo(function KanbanBoard({ onAddTicket, filteredTickets }: KanbanBoardProps) {
   const { board, tickets, moveTicket, setTickets, deleteTicket } = useBoardStore();
+
+  // Use filtered tickets if provided, otherwise use all tickets
+  const displayTickets = filteredTickets || tickets;
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
@@ -189,7 +193,7 @@ export const KanbanBoard = memo(function KanbanBoard({ onAddTicket }: KanbanBoar
             <KanbanColumn
               key={column.id}
               column={column}
-              tickets={tickets[column.id] || []}
+              tickets={displayTickets[column.id] || []}
               onTicketClick={handleTicketClick}
               onAddTicket={() => onAddTicket?.(column.id)}
             />

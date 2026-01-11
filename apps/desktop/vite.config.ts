@@ -20,4 +20,22 @@ export default defineConfig({
       ignored: ['**/src-tauri/**'],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React libraries
+          'vendor-react': ['react', 'react-dom'],
+          // State management
+          'vendor-state': ['zustand'],
+          // UI libraries
+          'vendor-ui': ['framer-motion', 'lucide-react', 'cmdk'],
+          // DnD kit
+          'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+          // Utilities
+          'vendor-utils': ['date-fns', 'react-markdown', 'sonner'],
+        },
+      },
+    },
+  },
 });

@@ -733,3 +733,60 @@ export const selectColumnById = (id: string) => (state: BoardState) =>
 export const selectCurrentBoard = (state: BoardState) => state.board;
 
 export const selectBoards = (state: BoardState) => state.boards;
+
+// ===========================================
+// FILTER HELPER
+// ===========================================
+
+import type { FilterConfig } from '@/types';
+
+export const filterTickets = (
+  tickets: Record<string, Ticket[]>,
+  filter: FilterConfig
+): Record<string, Ticket[]> => {
+  if (!filter.search && !filter.priority?.length && !filter.labels?.length && !filter.dueBefore && !filter.dueAfter) {
+    return tickets;
+  }
+
+  const result: Record<string, Ticket[]> = {};
+  const searchLower = filter.search?.toLowerCase();
+
+  for (const [columnId, columnTickets] of Object.entries(tickets)) {
+    result[columnId] = columnTickets.filter((ticket) => {
+      // Search filter
+      if (searchLower) {
+        const titleMatch = ticket.title.toLowerCase().includes(searchLower);
+        const descMatch = ticket.description?.toLowerCase().includes(searchLower);
+        if (!titleMatch && !descMatch) return false;
+      }
+
+      // Priority filter
+      if (filter.priority?.length) {
+        if (!ticket.priority || !filter.priority.includes(ticket.priority)) {
+          return false;
+        }
+      }
+
+      // Labels filter
+      if (filter.labels?.length) {
+        const ticketLabelIds = ticket.labels.map((l) => l.id);
+        const hasMatchingLabel = filter.labels.some((labelId) =>
+          ticketLabelIds.includes(labelId)
+        );
+        if (!hasMatchingLabel) return false;
+      }
+
+      // Due date filters
+      if (filter.dueBefore && ticket.dueDate) {
+        if (ticket.dueDate > filter.dueBefore) return false;
+      }
+      if (filter.dueAfter && ticket.dueDate) {
+        if (ticket.dueDate < filter.dueAfter) return false;
+      }
+
+      return true;
+    });
+  }
+
+  return result;
+};

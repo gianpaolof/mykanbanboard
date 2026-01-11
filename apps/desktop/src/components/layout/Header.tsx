@@ -1,7 +1,6 @@
 // components/layout/Header.tsx
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import {
-  Search,
   LayoutGrid,
   List,
   GanttChart,
@@ -10,6 +9,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { SearchFilterBar } from '@/components/kanban/SearchFilterBar';
+import type { FilterConfig } from '@/types';
 
 type ViewMode = 'board' | 'list' | 'timeline';
 
@@ -17,24 +18,26 @@ interface HeaderProps {
   boardTitle?: string;
   ticketCount?: number;
   lastUpdated?: string;
-  onSearchClick?: () => void;
   onAIClick?: () => void;
   onSettingsClick?: () => void;
   onViewChange?: (view: ViewMode) => void;
   currentView?: ViewMode;
   className?: string;
+  filter?: FilterConfig;
+  onFilterChange?: (filter: FilterConfig) => void;
 }
 
-export function Header({
+export const Header = memo(function Header({
   boardTitle = 'My Project',
   ticketCount = 24,
   lastUpdated = '2m ago',
-  onSearchClick,
   onAIClick,
   onSettingsClick,
   onViewChange,
   currentView = 'board',
   className,
+  filter,
+  onFilterChange,
 }: HeaderProps) {
   const [activeView, setActiveView] = useState<ViewMode>(currentView);
 
@@ -72,37 +75,12 @@ export function Header({
         </span>
       </div>
 
-      {/* Center: Search Bar */}
-      <div className="flex-1 max-w-md mx-8">
-        <button
-          onClick={onSearchClick}
-          className={cn(
-            // Layout
-            'w-full flex items-center gap-3 px-3 h-8',
-            // Styling
-            'bg-bg-elevated rounded-lg',
-            'border border-border-subtle',
-            // Text
-            'text-sm text-text-tertiary',
-            // Interaction
-            'transition-all duration-200',
-            'hover:border-border-DEFAULT hover:bg-bg-hover',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:border-accent'
-          )}
-        >
-          <Search className="w-4 h-4 flex-shrink-0" />
-          <span className="flex-1 text-left">Search tickets...</span>
-          <kbd
-            className={cn(
-              'px-1.5 py-0.5 rounded',
-              'bg-bg-tertiary border border-border-subtle',
-              'text-2xs font-mono text-text-tertiary',
-              'flex items-center gap-0.5'
-            )}
-          >
-            ⌘K
-          </kbd>
-        </button>
+      {/* Center: Search & Filter Bar */}
+      <div className="flex-1 max-w-xl mx-8">
+        <SearchFilterBar
+          filter={filter || {}}
+          onFilterChange={onFilterChange || (() => {})}
+        />
       </div>
 
       {/* Right: Actions */}
@@ -207,4 +185,4 @@ export function Header({
       </div>
     </header>
   );
-}
+});
