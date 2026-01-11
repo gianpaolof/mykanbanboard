@@ -19,7 +19,11 @@ import { TicketModal } from './TicketModal';
 import { BoardSkeleton } from './BoardSkeleton';
 import type { Ticket } from '@/types';
 
-export const KanbanBoard = memo(function KanbanBoard() {
+interface KanbanBoardProps {
+  onAddTicket?: (columnId: string) => void;
+}
+
+export const KanbanBoard = memo(function KanbanBoard({ onAddTicket }: KanbanBoardProps) {
   const { board, tickets, moveTicket, setTickets, deleteTicket } = useBoardStore();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
@@ -187,9 +191,7 @@ export const KanbanBoard = memo(function KanbanBoard() {
               column={column}
               tickets={tickets[column.id] || []}
               onTicketClick={handleTicketClick}
-              onAddTicket={() => {
-                // TODO: Open create ticket modal
-              }}
+              onAddTicket={() => onAddTicket?.(column.id)}
             />
           ))}
         </div>

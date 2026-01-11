@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
+import { CreateTicketModal } from '@/components/kanban/CreateTicketModal';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { CommandPalette } from '@/components/layout/CommandPalette';
@@ -20,6 +21,8 @@ function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createTicketOpen, setCreateTicketOpen] = useState(false);
+  const [createTicketColumnId, setCreateTicketColumnId] = useState<string | undefined>(undefined);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -41,9 +44,9 @@ function App() {
   }, [loadBoard]);
 
   // Handlers
-  const handleCreateTicket = useCallback(() => {
-    toast.info('Create ticket modal coming soon');
-    // TODO: Open create ticket modal
+  const handleCreateTicket = useCallback((columnId?: string) => {
+    setCreateTicketColumnId(columnId);
+    setCreateTicketOpen(true);
   }, []);
 
   const handleOpenAI = useCallback(() => {
@@ -73,7 +76,7 @@ function App() {
   // Use centralized keyboard shortcuts hook
   useKanbanShortcuts({
     onToggleCommandPalette: () => setCommandPaletteOpen((prev) => !prev),
-    onCreateTicket: handleCreateTicket,
+    onCreateTicket: () => handleCreateTicket(),
     onOpenAI: () => setAiPanelOpen((prev) => !prev),
     onDailySummary: handleDailySummary,
     onSwitchView: handleSwitchView,
@@ -88,6 +91,7 @@ function App() {
         setCommandPaletteOpen(false);
         setAiPanelOpen(false);
         setSettingsOpen(false);
+        setCreateTicketOpen(false);
       }
     };
     window.addEventListener('keydown', handleEscape);
@@ -126,7 +130,7 @@ function App() {
 
         {/* Board */}
         <main className="flex-1 overflow-hidden">
-          <KanbanBoard />
+          <KanbanBoard onAddTicket={handleCreateTicket} />
         </main>
       </div>
 
@@ -134,7 +138,7 @@ function App() {
       <CommandPalette
         open={commandPaletteOpen}
         onOpenChange={setCommandPaletteOpen}
-        onCreateTicket={handleCreateTicket}
+        onCreateTicket={() => handleCreateTicket()}
         onOpenAI={handleOpenAI}
         onSwitchView={handleSwitchView}
       />
@@ -149,6 +153,13 @@ function App() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+
+      {/* Create Ticket Modal */}
+      <CreateTicketModal
+        isOpen={createTicketOpen}
+        onClose={() => setCreateTicketOpen(false)}
+        defaultColumnId={createTicketColumnId}
       />
 
       {/* Toast Notifications */}
