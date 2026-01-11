@@ -217,3 +217,71 @@ export interface FilterConfig {
   dueBefore?: string;
   dueAfter?: string;
 }
+
+// ===========================================
+// AUTOMATION RULES
+// ===========================================
+
+export type TriggerType =
+  | 'ticket_created'
+  | 'ticket_moved'
+  | 'ticket_updated'
+  | 'label_added'
+  | 'label_removed'
+  | 'due_date_approaching'
+  | 'priority_changed';
+
+export type ActionType =
+  | 'move_ticket'
+  | 'set_priority'
+  | 'add_label'
+  | 'remove_label'
+  | 'set_due_date'
+  | 'notify'
+  | 'auto_triage';
+
+export interface AutomationRule {
+  id: string;
+  boardId: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  triggerType: TriggerType;
+  triggerConfig: Record<string, unknown>;
+  actionType: ActionType;
+  actionConfig: Record<string, unknown>;
+  lastTriggeredAt?: string;
+  triggerCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationRuleCreate {
+  boardId: string;
+  name: string;
+  description: string;
+  triggerType: TriggerType;
+  triggerConfig?: Record<string, unknown>;
+  actionType: ActionType;
+  actionConfig?: Record<string, unknown>;
+}
+
+export interface AutomationRuleUpdate {
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+  triggerType?: TriggerType;
+  triggerConfig?: Record<string, unknown>;
+  actionType?: ActionType;
+  actionConfig?: Record<string, unknown>;
+}
+
+export interface ParsedRule {
+  ruleName: string;
+  triggerType: TriggerType;
+  triggerConfig: Record<string, unknown>;
+  actionType: ActionType;
+  actionConfig: Record<string, unknown>;
+  confidence: number;
+  explanation: string;
+}

@@ -1309,3 +1309,320 @@ pub fn reorder_subtasks(db: State<Database>, subtask_ids: Vec<String>) -> Result
 
     Ok(())
 }
+
+// ===========================================
+// AUTOMATION RULE COMMANDS
+// ===========================================
+
+#[tauri::command]
+pub fn get_automation_rules(db: State<Database>, board_id: String) -> Result<Vec<AutomationRule>, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, board_id, name, description, enabled, trigger_type, trigger_config,
+                    action_type, action_config, last_triggered_at, trigger_count, created_at, updated_at
+             FROM automation_rules
+             WHERE board_id = ?1
+             ORDER BY created_at DESC",
+        )
+        .map_err(AppError::from)?;
+
+    let rules = stmt
+        .query_map([&board_id], |row| {
+            let enabled: i32 = row.get(4)?;
+            let trigger_type_str: String = row.get(5)?;
+            let trigger_config_str: String = row.get(6)?;
+            let action_type_str: String = row.get(7)?;
+            let action_config_str: String = row.get(8)?;
+            let last_triggered_at_str: Option<String> = row.get(9)?;
+            let created_at_str: String = row.get(11)?;
+            let updated_at_str: String = row.get(12)?;
+
+            Ok(AutomationRule {
+                id: row.get(0)?,
+                board_id: row.get(1)?,
+                name: row.get(2)?,
+                description: row.get(3)?,
+                enabled: enabled != 0,
+                trigger_type: TriggerType::from_str(&trigger_type_str)
+                    .unwrap_or(TriggerType::TicketCreated),
+                trigger_config: serde_json::from_str(&trigger_config_str)
+                    .unwrap_or(serde_json::json!({})),
+                action_type: ActionType::from_str(&action_type_str)
+                    .unwrap_or(ActionType::Notify),
+                action_config: serde_json::from_str(&action_config_str)
+                    .unwrap_or(serde_json::json!({})),
+                last_triggered_at: last_triggered_at_str
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|d| d.with_timezone(&Utc)),
+                trigger_count: row.get(10)?,
+                created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                    .unwrap()
+                    .with_timezone(&Utc),
+                updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+                    .unwrap()
+                    .with_timezone(&Utc),
+            })
+        })
+        .map_err(AppError::from)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+
+    Ok(rules)
+}
+
+#[tauri::command]
+pub fn get_automation_rule(db: State<Database>, id: String) -> Result<AutomationRule, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let rule = conn
+        .query_row(
+            "SELECT id, board_id, name, description, enabled, trigger_type, trigger_config,
+                    action_type, action_config, last_triggered_at, trigger_count, created_at, updated_at
+             FROM automation_rules WHERE id = ?1",
+            [&id],
+            |row| {
+                let enabled: i32 = row.get(4)?;
+                let trigger_type_str: String = row.get(5)?;
+                let trigger_config_str: String = row.get(6)?;
+                let action_type_str: String = row.get(7)?;
+                let action_config_str: String = row.get(8)?;
+                let last_triggered_at_str: Option<String> = row.get(9)?;
+                let created_at_str: String = row.get(11)?;
+                let updated_at_str: String = row.get(12)?;
+
+                Ok(AutomationRule {
+                    id: row.get(0)?,
+                    board_id: row.get(1)?,
+                    name: row.get(2)?,
+                    description: row.get(3)?,
+                    enabled: enabled != 0,
+                    trigger_type: TriggerType::from_str(&trigger_type_str)
+                        .unwrap_or(TriggerType::TicketCreated),
+                    trigger_config: serde_json::from_str(&trigger_config_str)
+                        .unwrap_or(serde_json::json!({})),
+                    action_type: ActionType::from_str(&action_type_str)
+                        .unwrap_or(ActionType::Notify),
+                    action_config: serde_json::from_str(&action_config_str)
+                        .unwrap_or(serde_json::json!({})),
+                    last_triggered_at: last_triggered_at_str
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|d| d.with_timezone(&Utc)),
+                    trigger_count: row.get(10)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                })
+            },
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(format!("Automation rule {} not found", id)))?;
+
+    Ok(rule)
+}
+
+#[tauri::command]
+pub fn create_automation_rule(
+    db: State<Database>,
+    rule: CreateAutomationRule,
+) -> Result<AutomationRule, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Verify board exists
+    let board_exists: bool = conn
+        .query_row("SELECT 1 FROM boards WHERE id = ?1", [&rule.board_id], |_| {
+            Ok(true)
+        })
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !board_exists {
+        return Err(AppError::NotFound(format!("Board {} not found", rule.board_id)).into());
+    }
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now();
+    let trigger_config = rule.trigger_config.unwrap_or(serde_json::json!({}));
+    let action_config = rule.action_config.unwrap_or(serde_json::json!({}));
+
+    conn.execute(
+        "INSERT INTO automation_rules (id, board_id, name, description, enabled, trigger_type, trigger_config,
+                                       action_type, action_config, trigger_count, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, 0, ?9, ?10)",
+        (
+            &id,
+            &rule.board_id,
+            &rule.name,
+            &rule.description,
+            rule.trigger_type.as_str(),
+            serde_json::to_string(&trigger_config).unwrap(),
+            rule.action_type.as_str(),
+            serde_json::to_string(&action_config).unwrap(),
+            &now.to_rfc3339(),
+            &now.to_rfc3339(),
+        ),
+    )
+    .map_err(AppError::from)?;
+
+    Ok(AutomationRule {
+        id,
+        board_id: rule.board_id,
+        name: rule.name,
+        description: rule.description,
+        enabled: true,
+        trigger_type: rule.trigger_type,
+        trigger_config,
+        action_type: rule.action_type,
+        action_config,
+        last_triggered_at: None,
+        trigger_count: 0,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn update_automation_rule(
+    db: State<Database>,
+    id: String,
+    updates: UpdateAutomationRule,
+) -> Result<AutomationRule, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Check if rule exists
+    let exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM automation_rules WHERE id = ?1",
+            [&id],
+            |_| Ok(true),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !exists {
+        return Err(AppError::NotFound(format!("Automation rule {} not found", id)).into());
+    }
+
+    // Build dynamic UPDATE query
+    let mut query = String::from("UPDATE automation_rules SET ");
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    let mut updates_applied = false;
+
+    if let Some(name) = &updates.name {
+        query.push_str("name = ?, ");
+        params.push(Box::new(name.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(description) = &updates.description {
+        query.push_str("description = ?, ");
+        params.push(Box::new(description.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(enabled) = updates.enabled {
+        query.push_str("enabled = ?, ");
+        params.push(Box::new(if enabled { 1i32 } else { 0i32 }));
+        updates_applied = true;
+    }
+
+    if let Some(trigger_type) = &updates.trigger_type {
+        query.push_str("trigger_type = ?, ");
+        params.push(Box::new(trigger_type.as_str().to_string()));
+        updates_applied = true;
+    }
+
+    if let Some(trigger_config) = &updates.trigger_config {
+        query.push_str("trigger_config = ?, ");
+        params.push(Box::new(serde_json::to_string(trigger_config).unwrap()));
+        updates_applied = true;
+    }
+
+    if let Some(action_type) = &updates.action_type {
+        query.push_str("action_type = ?, ");
+        params.push(Box::new(action_type.as_str().to_string()));
+        updates_applied = true;
+    }
+
+    if let Some(action_config) = &updates.action_config {
+        query.push_str("action_config = ?, ");
+        params.push(Box::new(serde_json::to_string(action_config).unwrap()));
+        updates_applied = true;
+    }
+
+    if !updates_applied {
+        return Err(AppError::InvalidInput("No updates provided".to_string()).into());
+    }
+
+    query.truncate(query.len() - 2);
+    query.push_str(" WHERE id = ?");
+    params.push(Box::new(id.clone()));
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&query, param_refs.as_slice())
+        .map_err(AppError::from)?;
+
+    // Fetch and return updated rule
+    drop(conn);
+    get_automation_rule(db, id)
+}
+
+#[tauri::command]
+pub fn delete_automation_rule(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let deleted = conn
+        .execute("DELETE FROM automation_rules WHERE id = ?1", [&id])
+        .map_err(AppError::from)?;
+
+    if deleted == 0 {
+        return Err(AppError::NotFound(format!("Automation rule {} not found", id)).into());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_automation_rule(db: State<Database>, id: String) -> Result<AutomationRule, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Toggle the enabled status
+    conn.execute(
+        "UPDATE automation_rules SET enabled = NOT enabled WHERE id = ?1",
+        [&id],
+    )
+    .map_err(AppError::from)?;
+
+    drop(conn);
+    get_automation_rule(db, id)
+}
+
+#[tauri::command]
+pub fn record_automation_trigger(db: State<Database>, id: String) -> Result<AutomationRule, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let now = Utc::now();
+
+    conn.execute(
+        "UPDATE automation_rules SET last_triggered_at = ?1, trigger_count = trigger_count + 1 WHERE id = ?2",
+        (&now.to_rfc3339(), &id),
+    )
+    .map_err(AppError::from)?;
+
+    drop(conn);
+    get_automation_rule(db, id)
+}

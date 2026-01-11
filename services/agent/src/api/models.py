@@ -140,6 +140,54 @@ class DailySummaryResponse(BaseModel):
 
 
 # ============================================================================
+# AUTOMATION RULE MODELS
+# ============================================================================
+
+
+class ParseRuleRequest(BaseModel):
+    """Request model for parsing natural language automation rules."""
+
+    natural_language: str = Field(
+        ...,
+        min_length=5,
+        max_length=500,
+        description="Natural language description of the automation rule",
+    )
+    board_context: dict | None = Field(
+        default=None,
+        description="Board context (columns, labels, etc.)",
+    )
+
+
+class ParseRuleResponse(BaseModel):
+    """Response model for parsed automation rule."""
+
+    rule_name: str = Field(..., max_length=50)
+    trigger_type: Literal[
+        "ticket_created",
+        "ticket_moved",
+        "ticket_updated",
+        "label_added",
+        "label_removed",
+        "due_date_approaching",
+        "priority_changed",
+    ]
+    trigger_config: dict = Field(default_factory=dict)
+    action_type: Literal[
+        "move_ticket",
+        "set_priority",
+        "add_label",
+        "remove_label",
+        "set_due_date",
+        "notify",
+        "auto_triage",
+    ]
+    action_config: dict = Field(default_factory=dict)
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    explanation: str
+
+
+# ============================================================================
 # ERROR MODELS
 # ============================================================================
 

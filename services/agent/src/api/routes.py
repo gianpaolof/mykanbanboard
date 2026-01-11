@@ -12,6 +12,7 @@ from ..agent.modules import (
     DecomposeModule,
     DailySummaryModule,
     ActionDeciderModule,
+    RuleParserModule,
 )
 from ..db.chroma import ChromaManager
 from .models import (
@@ -26,6 +27,8 @@ from .models import (
     SearchResult,
     DailySummaryResponse,
     TicketSummary,
+    ParseRuleRequest,
+    ParseRuleResponse,
     ErrorResponse,
 )
 
@@ -466,4 +469,85 @@ async def get_daily_summary() -> DailySummaryResponse:
         raise HTTPException(
             status_code=500,
             detail=f"Daily summary failed: {str(e)}",
+        )
+
+
+# ============================================================================
+# PARSE AUTOMATION RULE ENDPOINT
+# ============================================================================
+
+PARSE_RULE_TIMEOUT = 15
+
+
+@router.post(
+    "/parse-rule",
+    response_model=ParseRuleResponse,
+    summary="Parse automation rule",
+    description="Parse a natural language automation rule into structured trigger/action configuration",
+)
+async def parse_automation_rule(request: ParseRuleRequest) -> ParseRuleResponse:
+    """Parse a natural language automation rule.
+
+    Args:
+        request: Parse rule request with natural language and optional context
+
+    Returns:
+        Parsed rule with trigger type, trigger config, action type, action config
+
+    Raises:
+        HTTPException: If parsing fails
+    """
+    try:
+        logger.info(f"Parsing rule: {request.natural_language[:50]}...")
+
+        rule_parser = RuleParserModule()
+
+        # Run DSPy module with timeout
+        def run_parse():
+            return rule_parser(
+                natural_language=request.natural_language,
+                board_context=request.board_context or {},
+            )
+
+        result = await run_sync_with_timeout(run_parse, PARSE_RULE_TIMEOUT, "Parse rule")
+
+        # Extract values from DSPy prediction
+        rule_name = extract_value(result.rule_name)
+        trigger_type = extract_value(result.trigger_type)
+        trigger_config = extract_value(result.trigger_config)
+        action_type = extract_value(result.action_type)
+        action_config = extract_value(result.action_config)
+        confidence = extract_value(result.confidence)
+        explanation = extract_value(result.explanation)
+
+        # Ensure configs are dicts
+        if not isinstance(trigger_config, dict):
+            trigger_config = {}
+        if not isinstance(action_config, dict):
+            action_config = {}
+
+        # Ensure confidence is a float
+        try:
+            confidence = float(confidence) if confidence else 0.5
+            confidence = max(0.0, min(1.0, confidence))
+        except (ValueError, TypeError):
+            confidence = 0.5
+
+        return ParseRuleResponse(
+            rule_name=str(rule_name)[:50] if rule_name else "Unnamed Rule",
+            trigger_type=trigger_type,
+            trigger_config=trigger_config,
+            action_type=action_type,
+            action_config=action_config,
+            confidence=confidence,
+            explanation=str(explanation) if explanation else "",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Parse rule failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Parse rule failed: {str(e)}",
         )

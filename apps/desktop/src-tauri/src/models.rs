@@ -245,3 +245,135 @@ pub struct UpdateSubtask {
     pub completed: Option<bool>,
     pub position: Option<i32>,
 }
+
+// ===========================================
+// AUTOMATION RULES
+// ===========================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TriggerType {
+    TicketCreated,
+    TicketMoved,
+    TicketUpdated,
+    LabelAdded,
+    LabelRemoved,
+    DueDateApproaching,
+    PriorityChanged,
+}
+
+impl TriggerType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TriggerType::TicketCreated => "ticket_created",
+            TriggerType::TicketMoved => "ticket_moved",
+            TriggerType::TicketUpdated => "ticket_updated",
+            TriggerType::LabelAdded => "label_added",
+            TriggerType::LabelRemoved => "label_removed",
+            TriggerType::DueDateApproaching => "due_date_approaching",
+            TriggerType::PriorityChanged => "priority_changed",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "ticket_created" => Some(TriggerType::TicketCreated),
+            "ticket_moved" => Some(TriggerType::TicketMoved),
+            "ticket_updated" => Some(TriggerType::TicketUpdated),
+            "label_added" => Some(TriggerType::LabelAdded),
+            "label_removed" => Some(TriggerType::LabelRemoved),
+            "due_date_approaching" => Some(TriggerType::DueDateApproaching),
+            "priority_changed" => Some(TriggerType::PriorityChanged),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionType {
+    MoveTicket,
+    SetPriority,
+    AddLabel,
+    RemoveLabel,
+    SetDueDate,
+    Notify,
+    AutoTriage,
+}
+
+impl ActionType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ActionType::MoveTicket => "move_ticket",
+            ActionType::SetPriority => "set_priority",
+            ActionType::AddLabel => "add_label",
+            ActionType::RemoveLabel => "remove_label",
+            ActionType::SetDueDate => "set_due_date",
+            ActionType::Notify => "notify",
+            ActionType::AutoTriage => "auto_triage",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "move_ticket" => Some(ActionType::MoveTicket),
+            "set_priority" => Some(ActionType::SetPriority),
+            "add_label" => Some(ActionType::AddLabel),
+            "remove_label" => Some(ActionType::RemoveLabel),
+            "set_due_date" => Some(ActionType::SetDueDate),
+            "notify" => Some(ActionType::Notify),
+            "auto_triage" => Some(ActionType::AutoTriage),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRule {
+    pub id: String,
+    pub board_id: String,
+    pub name: String,
+    pub description: String,
+    pub enabled: bool,
+    pub trigger_type: TriggerType,
+    pub trigger_config: serde_json::Value,
+    pub action_type: ActionType,
+    pub action_config: serde_json::Value,
+    pub last_triggered_at: Option<DateTime<Utc>>,
+    pub trigger_count: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAutomationRule {
+    pub board_id: String,
+    pub name: String,
+    pub description: String,
+    pub trigger_type: TriggerType,
+    pub trigger_config: Option<serde_json::Value>,
+    pub action_type: ActionType,
+    pub action_config: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAutomationRule {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub enabled: Option<bool>,
+    pub trigger_type: Option<TriggerType>,
+    pub trigger_config: Option<serde_json::Value>,
+    pub action_type: Option<ActionType>,
+    pub action_config: Option<serde_json::Value>,
+}
+
+/// Payload for parsing natural language rules via AI
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParseRuleRequest {
+    pub board_id: String,
+    pub natural_language: String,
+}

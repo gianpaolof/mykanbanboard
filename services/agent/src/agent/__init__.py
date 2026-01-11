@@ -5,6 +5,7 @@ from .modules import (
     DecomposeModule,
     DailySummaryModule,
     ActionDeciderModule,
+    RuleParserModule,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "DecomposeModule",
     "DailySummaryModule",
     "ActionDeciderModule",
+    "RuleParserModule",
 ]

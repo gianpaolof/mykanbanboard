@@ -137,3 +137,56 @@ FOR EACH ROW
 BEGIN
     UPDATE subtasks SET updated_at = datetime('now') WHERE id = NEW.id;
 END;
+
+-- ===========================================
+-- AUTOMATION RULES
+-- ===========================================
+
+-- Automation rules store user-defined automations in natural language
+-- The AI parses the natural language into structured trigger/action pairs
+CREATE TABLE IF NOT EXISTS automation_rules (
+    id TEXT PRIMARY KEY NOT NULL,
+    board_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,  -- The natural language rule description
+    enabled INTEGER NOT NULL DEFAULT 1,
+    -- Parsed trigger configuration (JSON)
+    trigger_type TEXT NOT NULL CHECK(trigger_type IN (
+        'ticket_created',
+        'ticket_moved',
+        'ticket_updated',
+        'label_added',
+        'label_removed',
+        'due_date_approaching',
+        'priority_changed'
+    )),
+    trigger_config TEXT NOT NULL DEFAULT '{}',  -- JSON with trigger conditions
+    -- Parsed action configuration (JSON)
+    action_type TEXT NOT NULL CHECK(action_type IN (
+        'move_ticket',
+        'set_priority',
+        'add_label',
+        'remove_label',
+        'set_due_date',
+        'notify',
+        'auto_triage'
+    )),
+    action_config TEXT NOT NULL DEFAULT '{}',  -- JSON with action parameters
+    -- Metadata
+    last_triggered_at TEXT,
+    trigger_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_automation_rules_board_id ON automation_rules(board_id);
+CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled);
+CREATE INDEX IF NOT EXISTS idx_automation_rules_trigger_type ON automation_rules(trigger_type);
+
+CREATE TRIGGER IF NOT EXISTS update_automation_rules_timestamp
+AFTER UPDATE ON automation_rules
+FOR EACH ROW
+BEGIN
+    UPDATE automation_rules SET updated_at = datetime('now') WHERE id = NEW.id;
+END;

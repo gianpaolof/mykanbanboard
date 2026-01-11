@@ -87,6 +87,14 @@ pub fn run() {
             commands::delete_subtask,
             commands::toggle_subtask,
             commands::reorder_subtasks,
+            // Automation rule commands
+            commands::get_automation_rules,
+            commands::get_automation_rule,
+            commands::create_automation_rule,
+            commands::update_automation_rule,
+            commands::delete_automation_rule,
+            commands::toggle_automation_rule,
+            commands::record_automation_trigger,
             // Agent commands
             agent::agent_triage,
             agent::agent_decompose,

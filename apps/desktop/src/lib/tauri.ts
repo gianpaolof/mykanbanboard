@@ -18,6 +18,9 @@ import type {
   Subtask,
   SubtaskCreate,
   SubtaskUpdate,
+  AutomationRule,
+  AutomationRuleCreate,
+  AutomationRuleUpdate,
 } from '@/types';
 
 // ===========================================
@@ -314,6 +317,53 @@ export const agentApi = {
 };
 
 // ===========================================
+// AUTOMATION RULES API
+// ===========================================
+
+export const automationApi = {
+  /**
+   * Get all automation rules for a board
+   */
+  getRules: (boardId: string) =>
+    invoke<AutomationRule[]>('get_automation_rules', { boardId }),
+
+  /**
+   * Get a single automation rule by ID
+   */
+  getRule: (id: string) =>
+    invoke<AutomationRule>('get_automation_rule', { id }),
+
+  /**
+   * Create a new automation rule
+   */
+  createRule: (rule: AutomationRuleCreate) =>
+    invoke<AutomationRule>('create_automation_rule', { rule }),
+
+  /**
+   * Update an automation rule
+   */
+  updateRule: (id: string, updates: AutomationRuleUpdate) =>
+    invoke<AutomationRule>('update_automation_rule', { id, updates }),
+
+  /**
+   * Delete an automation rule
+   */
+  deleteRule: (id: string) => invoke<void>('delete_automation_rule', { id }),
+
+  /**
+   * Toggle an automation rule on/off
+   */
+  toggleRule: (id: string) =>
+    invoke<AutomationRule>('toggle_automation_rule', { id }),
+
+  /**
+   * Record that an automation rule was triggered
+   */
+  recordTrigger: (id: string) =>
+    invoke<AutomationRule>('record_automation_trigger', { id }),
+};
+
+// ===========================================
 // UNIFIED API
 // ===========================================
 
@@ -324,6 +374,7 @@ export const api = {
   labels: labelApi,
   subtasks: subtaskApi,
   agent: agentApi,
+  automations: automationApi,
 };
 
 export default api;
