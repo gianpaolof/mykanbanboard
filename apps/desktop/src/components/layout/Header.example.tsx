@@ -11,7 +11,6 @@ export function HeaderExample() {
   return (
     <div className="min-h-screen bg-bg-primary">
       <Header
-        boardTitle="My Project"
         ticketCount={24}
         lastUpdated="2m ago"
         currentView="board"
@@ -20,11 +19,13 @@ export function HeaderExample() {
         onViewChange={(view) => console.log('View changed to:', view)}
         filter={filter}
         onFilterChange={setFilter}
+        onCreateBoard={() => console.log('Create board')}
       />
 
       <main className="p-6">
         <p className="text-zinc-400">
-          Use the search bar and filters in the header
+          Use the search bar and filters in the header.
+          Click on the board name to switch between boards.
         </p>
       </main>
     </div>
@@ -42,15 +43,14 @@ export function HeaderExample() {
 //   return (
 //     <div className="min-h-screen bg-bg-primary">
 //       <Header
-//         boardTitle="My Kanban Board"
 //         ticketCount={42}
-//         lastUpdated="5m ago"
 //         currentView={view}
 //         onAIClick={() => setAIPanelOpen(true)}
 //         onSettingsClick={() => setSettingsOpen(true)}
 //         onViewChange={setView}
 //         filter={filter}
 //         onFilterChange={setFilter}
+//         onCreateBoard={() => setCreateBoardOpen(true)}
 //       />
 //
 //       {/* Your board content */}

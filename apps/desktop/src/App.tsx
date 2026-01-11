@@ -7,6 +7,7 @@ import { Header } from '@/components/layout/Header';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { AgentChat } from '@/components/ai/AgentChat';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { CreateBoardModal } from '@/components/boards/CreateBoardModal';
 import { Toaster } from '@/components/ui/Toaster';
 import { useBoardStore, filterTickets } from '@/stores/boardStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -23,6 +24,7 @@ function App() {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createTicketOpen, setCreateTicketOpen] = useState(false);
+  const [createBoardOpen, setCreateBoardOpen] = useState(false);
   const [createTicketColumnId, setCreateTicketColumnId] = useState<string | undefined>(undefined);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -104,6 +106,7 @@ function App() {
         setAiPanelOpen(false);
         setSettingsOpen(false);
         setCreateTicketOpen(false);
+        setCreateBoardOpen(false);
       }
     };
     window.addEventListener('keydown', handleEscape);
@@ -131,14 +134,13 @@ function App() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <Header
-          boardTitle="My Project"
           ticketCount={ticketCount}
-          lastUpdated="2m ago"
           onAIClick={() => setAiPanelOpen(true)}
           onSettingsClick={handleSettings}
           onViewChange={handleSwitchView}
           filter={filter}
           onFilterChange={handleFilterChange}
+          onCreateBoard={() => setCreateBoardOpen(true)}
         />
 
         {/* Board */}
@@ -176,6 +178,12 @@ function App() {
         isOpen={createTicketOpen}
         onClose={() => setCreateTicketOpen(false)}
         defaultColumnId={createTicketColumnId}
+      />
+
+      {/* Create Board Modal */}
+      <CreateBoardModal
+        isOpen={createBoardOpen}
+        onClose={() => setCreateBoardOpen(false)}
       />
 
       {/* Toast Notifications */}

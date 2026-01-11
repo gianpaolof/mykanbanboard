@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MoreHorizontal, Pencil, Trash2, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/boardStore';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { BoardListItem } from '@/types';
 
 interface BoardContextMenuProps {
@@ -18,6 +19,7 @@ export function BoardContextMenu({ board, onRename }: BoardContextMenuProps) {
 
   const [isOpen, setIsOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -61,18 +63,22 @@ export function BoardContextMenu({ board, onRename }: BoardContextMenuProps) {
     });
   };
 
-  const handleDelete = async () => {
+  const handleDeleteClick = () => {
     if (boards.length <= 1) {
       setIsOpen(false);
       return;
     }
+    setIsOpen(false);
+    setShowDeleteConfirm(true);
+  };
 
+  const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
       await deleteBoard(board.id);
+      setShowDeleteConfirm(false);
     } finally {
       setIsDeleting(false);
-      setIsOpen(false);
     }
   };
 
@@ -84,93 +90,108 @@ export function BoardContextMenu({ board, onRename }: BoardContextMenuProps) {
   const canDelete = boards.length > 1;
 
   return (
-    <div className="relative">
-      <button
-        ref={buttonRef}
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-        className={cn(
-          'p-1 rounded opacity-0 group-hover:opacity-100',
-          'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
-          'transition-all',
-          isOpen && 'opacity-100'
-        )}
-      >
-        <MoreHorizontal className="w-4 h-4" />
-      </button>
+    <>
+      <div className="relative">
+        <button
+          ref={buttonRef}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(!isOpen);
+          }}
+          className={cn(
+            'p-1 rounded opacity-0 group-hover:opacity-100',
+            'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
+            'transition-all',
+            isOpen && 'opacity-100'
+          )}
+        >
+          <MoreHorizontal className="w-4 h-4" />
+        </button>
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            ref={menuRef}
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.1 }}
-            className={cn(
-              'absolute right-0 top-full mt-1 z-50',
-              'w-40 p-1',
-              'bg-bg-elevated border border-border-subtle rounded-lg shadow-xl'
-            )}
-          >
-            {/* Rename */}
-            <button
-              onClick={handleRename}
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              ref={menuRef}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.1 }}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 rounded-md',
-                'text-sm text-text-secondary',
-                'hover:bg-bg-hover hover:text-text-primary',
-                'transition-colors'
+                'absolute right-0 top-full mt-1 z-50',
+                'w-40 p-1',
+                'bg-bg-elevated border border-border-subtle rounded-lg shadow-xl'
               )}
             >
-              <Pencil className="w-4 h-4" />
-              <span>Rename</span>
-            </button>
+              {/* Rename */}
+              <button
+                onClick={handleRename}
+                className={cn(
+                  'w-full flex items-center gap-2 px-3 py-2 rounded-md',
+                  'text-sm text-text-secondary',
+                  'hover:bg-bg-hover hover:text-text-primary',
+                  'transition-colors'
+                )}
+              >
+                <Pencil className="w-4 h-4" />
+                <span>Rename</span>
+              </button>
 
-            {/* Duplicate */}
-            <button
-              onClick={handleDuplicate}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 rounded-md',
-                'text-sm text-text-secondary',
-                'hover:bg-bg-hover hover:text-text-primary',
-                'transition-colors'
+              {/* Duplicate */}
+              <button
+                onClick={handleDuplicate}
+                className={cn(
+                  'w-full flex items-center gap-2 px-3 py-2 rounded-md',
+                  'text-sm text-text-secondary',
+                  'hover:bg-bg-hover hover:text-text-primary',
+                  'transition-colors'
+                )}
+              >
+                <Copy className="w-4 h-4" />
+                <span>Duplicate</span>
+              </button>
+
+              {/* Divider */}
+              <div className="my-1 border-t border-border-subtle" />
+
+              {/* Delete */}
+              <button
+                onClick={handleDeleteClick}
+                disabled={!canDelete}
+                className={cn(
+                  'w-full flex items-center gap-2 px-3 py-2 rounded-md',
+                  'text-sm',
+                  canDelete
+                    ? 'text-status-error hover:bg-status-error/10'
+                    : 'text-text-muted cursor-not-allowed',
+                  'transition-colors'
+                )}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+
+              {!canDelete && (
+                <p className="px-3 py-1.5 text-2xs text-text-muted">
+                  Cannot delete the last board
+                </p>
               )}
-            >
-              <Copy className="w-4 h-4" />
-              <span>Duplicate</span>
-            </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-            {/* Divider */}
-            <div className="my-1 border-t border-border-subtle" />
-
-            {/* Delete */}
-            <button
-              onClick={handleDelete}
-              disabled={!canDelete || isDeleting}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 rounded-md',
-                'text-sm',
-                canDelete
-                  ? 'text-status-error hover:bg-status-error/10'
-                  : 'text-text-muted cursor-not-allowed',
-                'transition-colors'
-              )}
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
-            </button>
-
-            {!canDelete && (
-              <p className="px-3 py-1.5 text-2xs text-text-muted">
-                Cannot delete the last board
-              </p>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title={`Delete "${board.name}"?`}
+        message={`This will permanently delete this board and all its columns and tickets. This action cannot be undone.`}
+        confirmText="Delete Board"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+    </>
   );
 }

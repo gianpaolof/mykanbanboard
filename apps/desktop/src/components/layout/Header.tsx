@@ -10,12 +10,12 @@ import {
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { SearchFilterBar } from '@/components/kanban/SearchFilterBar';
+import { BoardSwitcher } from '@/components/boards/BoardSwitcher';
 import type { FilterConfig } from '@/types';
 
 type ViewMode = 'board' | 'list' | 'timeline';
 
 interface HeaderProps {
-  boardTitle?: string;
   ticketCount?: number;
   lastUpdated?: string;
   onAIClick?: () => void;
@@ -25,12 +25,12 @@ interface HeaderProps {
   className?: string;
   filter?: FilterConfig;
   onFilterChange?: (filter: FilterConfig) => void;
+  onCreateBoard?: () => void;
 }
 
 export const Header = memo(function Header({
-  boardTitle = 'My Project',
-  ticketCount = 24,
-  lastUpdated = '2m ago',
+  ticketCount = 0,
+  lastUpdated = 'just now',
   onAIClick,
   onSettingsClick,
   onViewChange,
@@ -38,6 +38,7 @@ export const Header = memo(function Header({
   className,
   filter,
   onFilterChange,
+  onCreateBoard,
 }: HeaderProps) {
   const [activeView, setActiveView] = useState<ViewMode>(currentView);
 
@@ -65,13 +66,11 @@ export const Header = memo(function Header({
         className
       )}
     >
-      {/* Left: Board Info */}
+      {/* Left: Board Switcher + Info */}
       <div className="flex items-center gap-3 min-w-0 flex-shrink">
-        <h1 className="text-base font-semibold text-text-primary truncate">
-          {boardTitle}
-        </h1>
+        <BoardSwitcher onCreateBoard={onCreateBoard} />
         <span className="text-xs text-text-tertiary whitespace-nowrap">
-          {ticketCount} tickets · Updated {lastUpdated}
+          {ticketCount} ticket{ticketCount !== 1 ? 's' : ''} · Updated {lastUpdated}
         </span>
       </div>
 
