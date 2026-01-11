@@ -14,21 +14,208 @@ pub fn get_default_board(db: State<Database>) -> Result<String, String> {
     db.get_or_create_default_board().map_err(|e| e.into())
 }
 
+#[tauri::command]
+pub fn get_boards(db: State<Database>) -> Result<Vec<BoardListItem>, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT b.id, b.name, b.updated_at,
+                    (SELECT COUNT(*) FROM tickets t
+                     INNER JOIN columns c ON t.column_id = c.id
+                     WHERE c.board_id = b.id) as ticket_count
+             FROM boards b
+             ORDER BY b.updated_at DESC",
+        )
+        .map_err(AppError::from)?;
+
+    let boards = stmt
+        .query_map([], |row| {
+            let updated_at_str: String = row.get(2)?;
+            Ok(BoardListItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+                    .unwrap()
+                    .with_timezone(&Utc),
+                ticket_count: row.get(3)?,
+            })
+        })
+        .map_err(AppError::from)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+
+    Ok(boards)
+}
+
+#[tauri::command]
+pub fn get_board(db: State<Database>, id: String) -> Result<Board, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let board = conn
+        .query_row(
+            "SELECT id, name, created_at, updated_at FROM boards WHERE id = ?1",
+            [&id],
+            |row| {
+                let created_at_str: String = row.get(2)?;
+                let updated_at_str: String = row.get(3)?;
+                Ok(Board {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                })
+            },
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(format!("Board {} not found", id)))?;
+
+    Ok(board)
+}
+
+#[tauri::command]
+pub fn create_board(db: State<Database>, board: CreateBoard) -> Result<Board, String> {
+    let conn = db.connection();
+    let mut conn = conn.lock().unwrap();
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now();
+
+    let tx = conn.savepoint().map_err(AppError::from)?;
+
+    // Create board
+    tx.execute(
+        "INSERT INTO boards (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+        (&id, &board.name, &now.to_rfc3339(), &now.to_rfc3339()),
+    )
+    .map_err(AppError::from)?;
+
+    // Create default columns for the new board
+    let default_columns = vec![
+        ("Backlog", "#71717a", 0),
+        ("To Do", "#3b82f6", 1),
+        ("In Progress", "#f59e0b", 2),
+        ("Review", "#a855f7", 3),
+        ("Done", "#22c55e", 4),
+    ];
+
+    for (name, color, position) in default_columns {
+        let col_id = uuid::Uuid::new_v4().to_string();
+        tx.execute(
+            "INSERT INTO columns (id, board_id, name, position, color) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (&col_id, &id, name, position, color),
+        )
+        .map_err(AppError::from)?;
+    }
+
+    tx.commit().map_err(AppError::from)?;
+
+    Ok(Board {
+        id,
+        name: board.name,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn update_board(db: State<Database>, id: String, updates: UpdateBoard) -> Result<Board, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Check if board exists
+    let exists: bool = conn
+        .query_row("SELECT 1 FROM boards WHERE id = ?1", [&id], |_| Ok(true))
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !exists {
+        return Err(AppError::NotFound(format!("Board {} not found", id)).into());
+    }
+
+    // Build dynamic UPDATE query
+    let mut query = String::from("UPDATE boards SET updated_at = ?, ");
+    let now = Utc::now().to_rfc3339();
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(now)];
+    let mut updates_applied = false;
+
+    if let Some(name) = &updates.name {
+        query.push_str("name = ?, ");
+        params.push(Box::new(name.clone()));
+        updates_applied = true;
+    }
+
+    if !updates_applied {
+        return Err(AppError::InvalidInput("No updates provided".to_string()).into());
+    }
+
+    // Remove trailing comma and space
+    query.truncate(query.len() - 2);
+    query.push_str(" WHERE id = ?");
+    params.push(Box::new(id.clone()));
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&query, param_refs.as_slice())
+        .map_err(AppError::from)?;
+
+    // Fetch and return updated board
+    drop(conn);
+    get_board(db, id)
+}
+
+#[tauri::command]
+pub fn delete_board(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Check if this is the last board
+    let board_count: i32 = conn
+        .query_row("SELECT COUNT(*) FROM boards", [], |row| row.get(0))
+        .map_err(AppError::from)?;
+
+    if board_count <= 1 {
+        return Err(AppError::InvalidInput("Cannot delete the last board".to_string()).into());
+    }
+
+    // Delete board (columns and tickets cascade due to FK)
+    let deleted = conn
+        .execute("DELETE FROM boards WHERE id = ?1", [&id])
+        .map_err(AppError::from)?;
+
+    if deleted == 0 {
+        return Err(AppError::NotFound(format!("Board {} not found", id)).into());
+    }
+
+    Ok(())
+}
+
 // ===========================================
 // COLUMN COMMANDS
 // ===========================================
 
 #[tauri::command]
-pub fn get_columns(db: State<Database>) -> Result<Vec<Column>, String> {
+pub fn get_columns(db: State<Database>, board_id: Option<String>) -> Result<Vec<Column>, String> {
     let conn = db.connection();
     let conn = conn.lock().unwrap();
 
-    let mut stmt = conn
-        .prepare("SELECT id, name, position, color, wip_limit FROM columns ORDER BY position ASC")
-        .map_err(AppError::from)?;
+    let query = if board_id.is_some() {
+        "SELECT id, name, position, color, wip_limit FROM columns WHERE board_id = ?1 ORDER BY position ASC"
+    } else {
+        "SELECT id, name, position, color, wip_limit FROM columns ORDER BY position ASC"
+    };
 
-    let columns = stmt
-        .query_map([], |row| {
+    let mut stmt = conn.prepare(query).map_err(AppError::from)?;
+
+    let columns = if let Some(bid) = board_id {
+        stmt.query_map([bid], |row| {
             Ok(Column {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -39,20 +226,37 @@ pub fn get_columns(db: State<Database>) -> Result<Vec<Column>, String> {
         })
         .map_err(AppError::from)?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(AppError::from)?;
+        .map_err(AppError::from)?
+    } else {
+        stmt.query_map([], |row| {
+            Ok(Column {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                position: row.get(2)?,
+                color: row.get(3)?,
+                wip_limit: row.get(4)?,
+            })
+        })
+        .map_err(AppError::from)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?
+    };
 
     Ok(columns)
 }
 
 #[tauri::command]
-pub fn create_column(db: State<Database>, column: CreateColumn) -> Result<Column, String> {
+pub fn create_column(db: State<Database>, board_id: Option<String>, column: CreateColumn) -> Result<Column, String> {
     let conn = db.connection();
     let conn = conn.lock().unwrap();
 
-    // Get board_id (default board)
-    let board_id: String = conn
-        .query_row("SELECT id FROM boards LIMIT 1", [], |row| row.get(0))
-        .map_err(AppError::from)?;
+    // Get board_id (use provided or default to first board)
+    let board_id: String = if let Some(bid) = board_id {
+        bid
+    } else {
+        conn.query_row("SELECT id FROM boards LIMIT 1", [], |row| row.get(0))
+            .map_err(AppError::from)?
+    };
 
     // Get max position
     let max_position: Option<i32> = conn
@@ -223,32 +427,60 @@ pub fn reorder_columns(db: State<Database>, column_ids: Vec<String>) -> Result<(
 // ===========================================
 
 #[tauri::command]
-pub fn get_tickets(db: State<Database>, column_id: Option<String>) -> Result<Vec<Ticket>, String> {
+pub fn get_tickets(db: State<Database>, board_id: Option<String>, column_id: Option<String>) -> Result<Vec<Ticket>, String> {
     let conn = db.connection();
     let conn = conn.lock().unwrap();
 
-    let query = if column_id.is_some() {
-        "SELECT id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at
-         FROM tickets WHERE column_id = ?1 ORDER BY position ASC"
-    } else {
-        "SELECT id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at
-         FROM tickets ORDER BY position ASC"
+    // Build query based on filters
+    let (query, params): (&str, Vec<String>) = match (&board_id, &column_id) {
+        (Some(bid), Some(cid)) => (
+            "SELECT t.id, t.title, t.description, t.column_id, t.position, t.priority, t.effort, t.due_date, t.created_at, t.updated_at
+             FROM tickets t
+             INNER JOIN columns c ON t.column_id = c.id
+             WHERE c.board_id = ?1 AND t.column_id = ?2
+             ORDER BY t.position ASC",
+            vec![bid.clone(), cid.clone()],
+        ),
+        (Some(bid), None) => (
+            "SELECT t.id, t.title, t.description, t.column_id, t.position, t.priority, t.effort, t.due_date, t.created_at, t.updated_at
+             FROM tickets t
+             INNER JOIN columns c ON t.column_id = c.id
+             WHERE c.board_id = ?1
+             ORDER BY t.position ASC",
+            vec![bid.clone()],
+        ),
+        (None, Some(cid)) => (
+            "SELECT id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at
+             FROM tickets WHERE column_id = ?1 ORDER BY position ASC",
+            vec![cid.clone()],
+        ),
+        (None, None) => (
+            "SELECT id, title, description, column_id, position, priority, effort, due_date, created_at, updated_at
+             FROM tickets ORDER BY position ASC",
+            vec![],
+        ),
     };
 
     let mut stmt = conn.prepare(query).map_err(AppError::from)?;
 
-    let tickets = if let Some(col_id) = column_id {
-        stmt.query_map([col_id], parse_ticket_row)
+    let tickets: Vec<Ticket> = match params.len() {
+        0 => stmt.query_map([], parse_ticket_row)
             .map_err(AppError::from)?
-    } else {
-        stmt.query_map([], parse_ticket_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::from)?,
+        1 => stmt.query_map([&params[0]], parse_ticket_row)
             .map_err(AppError::from)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::from)?,
+        2 => stmt.query_map([&params[0], &params[1]], parse_ticket_row)
+            .map_err(AppError::from)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::from)?,
+        _ => vec![],
     };
 
     let mut result = Vec::new();
-    for ticket_result in tickets {
-        let mut ticket = ticket_result.map_err(AppError::from)?;
-
+    for mut ticket in tickets {
         // Load labels
         ticket.labels = get_ticket_labels(&conn, &ticket.id)?;
         // Load comments

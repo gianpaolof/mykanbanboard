@@ -184,3 +184,30 @@ pub struct UpdateLabel {
     pub name: Option<String>,
     pub color: Option<String>,
 }
+
+// ===========================================
+// BOARD DTOs
+// ===========================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardListItem {
+    pub id: String,
+    pub name: String,
+    pub ticket_count: i32,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateBoard {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateBoard {
+    pub name: Option<String>,
+    pub description: Option<String>,
+}

@@ -61,15 +61,16 @@ export const boardApi = {
 
 export const columnApi = {
   /**
-   * Get all columns ordered by position
+   * Get columns, optionally filtered by board
    */
-  getColumns: () => invoke<Column[]>('get_columns'),
+  getColumns: (boardId?: string) =>
+    invoke<Column[]>('get_columns', { boardId: boardId ?? null }),
 
   /**
    * Create a new column
    */
-  createColumn: (column: ColumnCreate) =>
-    invoke<Column>('create_column', { column }),
+  createColumn: (column: ColumnCreate, boardId?: string) =>
+    invoke<Column>('create_column', { boardId: boardId ?? null, column }),
 
   /**
    * Update a column
@@ -95,10 +96,10 @@ export const columnApi = {
 
 export const ticketApi = {
   /**
-   * Get all tickets, optionally filtered by column
+   * Get all tickets, optionally filtered by board and/or column
    */
-  getTickets: (columnId?: string) =>
-    invoke<Ticket[]>('get_tickets', { columnId: columnId ?? null }),
+  getTickets: (boardId?: string, columnId?: string) =>
+    invoke<Ticket[]>('get_tickets', { boardId: boardId ?? null, columnId: columnId ?? null }),
 
   /**
    * Get a single ticket by ID

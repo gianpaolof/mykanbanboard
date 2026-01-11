@@ -144,11 +144,11 @@ export const useBoardStore = create<BoardState>()(
         set({ isSwitching: true, currentBoardId: boardId });
 
         try {
-          // Load all data in parallel
+          // Load all data in parallel, filtered by board_id
           const [columns, labels, tickets] = await Promise.all([
-            api.columns.getColumns(),
+            api.columns.getColumns(boardId),
             api.labels.getLabels(),
-            api.tickets.getTickets(),
+            api.tickets.getTickets(boardId),
           ]);
 
           // Group tickets by column
@@ -322,10 +322,11 @@ export const useBoardStore = create<BoardState>()(
       addColumn: async (column) => {
         const prevColumns = get().columns;
         const prevBoard = get().board;
+        const boardId = get().currentBoardId;
 
         try {
-          // Call backend
-          const newColumn = await api.columns.createColumn(column);
+          // Call backend with current board_id
+          const newColumn = await api.columns.createColumn(column, boardId ?? undefined);
 
           set((state) => ({
             columns: [...state.columns, newColumn],
