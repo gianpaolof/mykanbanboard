@@ -11,6 +11,10 @@ import type {
   ColumnCreate,
   Label,
   LabelCreate,
+  Board,
+  BoardListItem,
+  BoardCreate,
+  BoardUpdate,
 } from '@/types';
 
 // ===========================================
@@ -23,6 +27,32 @@ export const boardApi = {
    * @returns Board ID
    */
   getDefaultBoard: () => invoke<string>('get_default_board'),
+
+  /**
+   * Get all boards (lightweight list)
+   */
+  getBoards: () => invoke<BoardListItem[]>('get_boards'),
+
+  /**
+   * Get a single board by ID
+   */
+  getBoard: (id: string) => invoke<Board>('get_board', { id }),
+
+  /**
+   * Create a new board
+   */
+  createBoard: (board: BoardCreate) => invoke<Board>('create_board', { board }),
+
+  /**
+   * Update a board
+   */
+  updateBoard: (id: string, updates: BoardUpdate) =>
+    invoke<Board>('update_board', { id, updates }),
+
+  /**
+   * Delete a board
+   */
+  deleteBoard: (id: string) => invoke<void>('delete_board', { id }),
 };
 
 // ===========================================

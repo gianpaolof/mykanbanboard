@@ -94,9 +94,27 @@ export interface Comment {
 export interface Board {
   id: string;
   name: string;
+  description?: string;
   columns: Column[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BoardListItem {
+  id: string;
+  name: string;
+  ticketCount?: number;
+  updatedAt: string;
+}
+
+export interface BoardCreate {
+  name: string;
+  description?: string;
+}
+
+export interface BoardUpdate {
+  name?: string;
+  description?: string;
 }
 
 // ===========================================
