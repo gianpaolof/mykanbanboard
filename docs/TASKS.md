@@ -171,10 +171,17 @@
 
 - [x] **TASK-046**: Error handling UI
   > Completato: Integrato sonner toast, aggiunto toast.error/success a tutte le operazioni in boardStore.
-- [ ] **TASK-047**: Light mode
-- [ ] **TASK-048**: Settings page
-- [ ] **TASK-049**: Multiple boards
-- [ ] **TASK-050**: Export/Import
+- [x] **TASK-047**: Light mode
+  > Completato: themeStore con Zustand persist, CSS variables per light/dark, ThemeToggle component, darkMode:'class' Tailwind strategy.
+
+- [x] **TASK-048**: Settings page
+  > Completato: SettingsModal con tab Appearance/AI/Shortcuts, settingsStore, AppearanceSettings, AISettings, KeyboardShortcutsSettings.
+
+- [x] **TASK-049**: Multiple boards
+  > Completato: BoardListItem/BoardCreate/BoardUpdate types, boardStore multi-board con persist, CreateBoardModal, BoardItem, BoardContextMenu, Sidebar boards section.
+
+- [x] **TASK-050**: Export/Import
+  > Completato: export-import.ts lib con validation, DataManagementSettings component, Data tab in Settings con export/import JSON.
 
 ### 3.2 Performance & Stability
 
@@ -192,8 +199,8 @@
 |-------|-------|------|----------|
 | 1. Foundation | 24 | 24 | 100% |
 | 2. AI Agent | 18 | 18 | 100% |
-| 3. Polish | 10 | 6 | 60% |
-| **Total** | **52** | **48** | **92%** |
+| 3. Polish | 10 | 10 | 100% |
+| **Total** | **52** | **52** | **100%** |
 
 ---
 
