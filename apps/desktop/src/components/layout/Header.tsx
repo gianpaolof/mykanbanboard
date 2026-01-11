@@ -4,6 +4,7 @@ import {
   LayoutGrid,
   List,
   GanttChart,
+  Calendar,
   Sparkles,
   Settings,
 } from 'lucide-react';
@@ -13,7 +14,7 @@ import { SearchFilterBar } from '@/components/kanban/SearchFilterBar';
 import { BoardSwitcher } from '@/components/boards/BoardSwitcher';
 import type { FilterConfig } from '@/types';
 
-type ViewMode = 'board' | 'list' | 'timeline';
+type ViewMode = 'board' | 'list' | 'timeline' | 'calendar';
 
 interface HeaderProps {
   ticketCount?: number;
@@ -51,6 +52,7 @@ export const Header = memo(function Header({
     { id: 'board', icon: LayoutGrid, label: 'Board' },
     { id: 'list', icon: List, label: 'List' },
     { id: 'timeline', icon: GanttChart, label: 'Timeline' },
+    { id: 'calendar', icon: Calendar, label: 'Calendar' },
   ];
 
   return (

@@ -211,3 +211,37 @@ pub struct UpdateBoard {
     pub name: Option<String>,
     pub description: Option<String>,
 }
+
+// ===========================================
+// SUBTASK
+// ===========================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subtask {
+    pub id: String,
+    pub parent_ticket_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: bool,
+    pub position: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSubtask {
+    pub parent_ticket_id: String,
+    pub title: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSubtask {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub completed: Option<bool>,
+    pub position: Option<i32>,
+}

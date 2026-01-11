@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
+import { CalendarView } from '@/components/calendar';
 import { CreateTicketModal } from '@/components/kanban/CreateTicketModal';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
@@ -28,8 +29,7 @@ function App() {
   const [createTicketColumnId, setCreateTicketColumnId] = useState<string | undefined>(undefined);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_currentView, setCurrentView] = useState<'board' | 'list' | 'timeline'>('board');
+  const [currentView, setCurrentView] = useState<'board' | 'list' | 'timeline' | 'calendar'>('board');
   const [filter, setFilter] = useState<FilterConfig>({});
 
   // Apply filtering to tickets
@@ -64,9 +64,9 @@ function App() {
     setAiPanelOpen(true);
   }, []);
 
-  const handleSwitchView = useCallback((view: 'board' | 'list' | 'timeline') => {
+  const handleSwitchView = useCallback((view: 'board' | 'list' | 'timeline' | 'calendar') => {
     setCurrentView(view);
-    if (view !== 'board') {
+    if (view !== 'board' && view !== 'calendar') {
       toast.info(`${view.charAt(0).toUpperCase() + view.slice(1)} view coming soon`);
     }
   }, []);
@@ -143,12 +143,16 @@ function App() {
           onCreateBoard={() => setCreateBoardOpen(true)}
         />
 
-        {/* Board */}
+        {/* Main Content */}
         <main className="flex-1 overflow-hidden">
-          <KanbanBoard
-            onAddTicket={handleCreateTicket}
-            filteredTickets={filteredTickets}
-          />
+          {currentView === 'calendar' ? (
+            <CalendarView filteredTickets={filteredTickets} />
+          ) : (
+            <KanbanBoard
+              onAddTicket={handleCreateTicket}
+              filteredTickets={filteredTickets}
+            />
+          )}
         </main>
       </div>
 

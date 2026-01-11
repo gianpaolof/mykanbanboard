@@ -95,6 +95,25 @@ CREATE INDEX IF NOT EXISTS idx_comments_ticket_id ON comments(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at);
 
 -- ===========================================
+-- SUBTASKS
+-- ===========================================
+
+CREATE TABLE IF NOT EXISTS subtasks (
+    id TEXT PRIMARY KEY NOT NULL,
+    parent_ticket_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    completed INTEGER NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (parent_ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_subtasks_parent_ticket_id ON subtasks(parent_ticket_id);
+CREATE INDEX IF NOT EXISTS idx_subtasks_position ON subtasks(position);
+
+-- ===========================================
 -- TRIGGERS (Auto-update updated_at)
 -- ===========================================
 
@@ -110,4 +129,11 @@ AFTER UPDATE ON tickets
 FOR EACH ROW
 BEGIN
     UPDATE tickets SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_subtasks_timestamp
+AFTER UPDATE ON subtasks
+FOR EACH ROW
+BEGIN
+    UPDATE subtasks SET updated_at = datetime('now') WHERE id = NEW.id;
 END;

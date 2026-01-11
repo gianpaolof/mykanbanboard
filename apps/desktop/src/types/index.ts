@@ -88,6 +88,34 @@ export interface Comment {
 }
 
 // ===========================================
+// SUBTASK
+// ===========================================
+
+export interface Subtask {
+  id: string;
+  parentTicketId: string;
+  title: string;
+  description?: string;
+  completed: boolean;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubtaskCreate {
+  parentTicketId: string;
+  title: string;
+  description?: string;
+}
+
+export interface SubtaskUpdate {
+  title?: string;
+  description?: string;
+  completed?: boolean;
+  position?: number;
+}
+
+// ===========================================
 // BOARD
 // ===========================================
 
@@ -164,7 +192,7 @@ export interface ChatMessage {
 // UI STATE
 // ===========================================
 
-export type ViewMode = 'board' | 'list' | 'timeline';
+export type ViewMode = 'board' | 'list' | 'timeline' | 'calendar';
 
 export interface ModalState {
   isOpen: boolean;

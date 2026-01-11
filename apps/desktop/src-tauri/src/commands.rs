@@ -1025,3 +1025,287 @@ fn get_ticket_comments(
 
     Ok(comments)
 }
+
+// ===========================================
+// SUBTASK COMMANDS
+// ===========================================
+
+#[tauri::command]
+pub fn get_subtasks(db: State<Database>, parent_ticket_id: String) -> Result<Vec<Subtask>, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, parent_ticket_id, title, description, completed, position, created_at, updated_at
+             FROM subtasks
+             WHERE parent_ticket_id = ?1
+             ORDER BY position ASC",
+        )
+        .map_err(AppError::from)?;
+
+    let subtasks = stmt
+        .query_map([&parent_ticket_id], |row| {
+            let created_at_str: String = row.get(6)?;
+            let updated_at_str: String = row.get(7)?;
+            let completed: i32 = row.get(4)?;
+            Ok(Subtask {
+                id: row.get(0)?,
+                parent_ticket_id: row.get(1)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                completed: completed != 0,
+                position: row.get(5)?,
+                created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                    .unwrap()
+                    .with_timezone(&Utc),
+                updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+                    .unwrap()
+                    .with_timezone(&Utc),
+            })
+        })
+        .map_err(AppError::from)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)?;
+
+    Ok(subtasks)
+}
+
+#[tauri::command]
+pub fn create_subtask(db: State<Database>, subtask: CreateSubtask) -> Result<Subtask, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Verify parent ticket exists
+    let ticket_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM tickets WHERE id = ?1",
+            [&subtask.parent_ticket_id],
+            |_| Ok(true),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !ticket_exists {
+        return Err(AppError::NotFound(format!(
+            "Ticket {} not found",
+            subtask.parent_ticket_id
+        ))
+        .into());
+    }
+
+    // Get max position
+    let max_position: Option<i32> = conn
+        .query_row(
+            "SELECT MAX(position) FROM subtasks WHERE parent_ticket_id = ?1",
+            [&subtask.parent_ticket_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .flatten();
+
+    let position = max_position.map(|p| p + 1).unwrap_or(0);
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now();
+
+    conn.execute(
+        "INSERT INTO subtasks (id, parent_ticket_id, title, description, completed, position, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7)",
+        (
+            &id,
+            &subtask.parent_ticket_id,
+            &subtask.title,
+            &subtask.description,
+            &position,
+            &now.to_rfc3339(),
+            &now.to_rfc3339(),
+        ),
+    )
+    .map_err(AppError::from)?;
+
+    Ok(Subtask {
+        id,
+        parent_ticket_id: subtask.parent_ticket_id,
+        title: subtask.title,
+        description: subtask.description,
+        completed: false,
+        position,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn update_subtask(
+    db: State<Database>,
+    id: String,
+    updates: UpdateSubtask,
+) -> Result<Subtask, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Check if subtask exists
+    let exists: bool = conn
+        .query_row("SELECT 1 FROM subtasks WHERE id = ?1", [&id], |_| Ok(true))
+        .optional()
+        .map_err(AppError::from)?
+        .unwrap_or(false);
+
+    if !exists {
+        return Err(AppError::NotFound(format!("Subtask {} not found", id)).into());
+    }
+
+    // Build dynamic UPDATE query
+    let mut query = String::from("UPDATE subtasks SET ");
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    let mut updates_applied = false;
+
+    if let Some(title) = &updates.title {
+        query.push_str("title = ?, ");
+        params.push(Box::new(title.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(description) = &updates.description {
+        query.push_str("description = ?, ");
+        params.push(Box::new(description.clone()));
+        updates_applied = true;
+    }
+
+    if let Some(completed) = updates.completed {
+        query.push_str("completed = ?, ");
+        params.push(Box::new(if completed { 1i32 } else { 0i32 }));
+        updates_applied = true;
+    }
+
+    if let Some(position) = updates.position {
+        query.push_str("position = ?, ");
+        params.push(Box::new(position));
+        updates_applied = true;
+    }
+
+    if !updates_applied {
+        return Err(AppError::InvalidInput("No updates provided".to_string()).into());
+    }
+
+    query.truncate(query.len() - 2);
+    query.push_str(" WHERE id = ?");
+    params.push(Box::new(id.clone()));
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&query, param_refs.as_slice())
+        .map_err(AppError::from)?;
+
+    // Fetch and return updated subtask
+    let subtask = conn
+        .query_row(
+            "SELECT id, parent_ticket_id, title, description, completed, position, created_at, updated_at
+             FROM subtasks WHERE id = ?1",
+            [&id],
+            |row| {
+                let created_at_str: String = row.get(6)?;
+                let updated_at_str: String = row.get(7)?;
+                let completed: i32 = row.get(4)?;
+                Ok(Subtask {
+                    id: row.get(0)?,
+                    parent_ticket_id: row.get(1)?,
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    completed: completed != 0,
+                    position: row.get(5)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                })
+            },
+        )
+        .map_err(AppError::from)?;
+
+    Ok(subtask)
+}
+
+#[tauri::command]
+pub fn delete_subtask(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let deleted = conn
+        .execute("DELETE FROM subtasks WHERE id = ?1", [&id])
+        .map_err(AppError::from)?;
+
+    if deleted == 0 {
+        return Err(AppError::NotFound(format!("Subtask {} not found", id)).into());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_subtask(db: State<Database>, id: String) -> Result<Subtask, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Toggle the completed status
+    conn.execute(
+        "UPDATE subtasks SET completed = NOT completed WHERE id = ?1",
+        [&id],
+    )
+    .map_err(AppError::from)?;
+
+    // Fetch and return updated subtask
+    let subtask = conn
+        .query_row(
+            "SELECT id, parent_ticket_id, title, description, completed, position, created_at, updated_at
+             FROM subtasks WHERE id = ?1",
+            [&id],
+            |row| {
+                let created_at_str: String = row.get(6)?;
+                let updated_at_str: String = row.get(7)?;
+                let completed: i32 = row.get(4)?;
+                Ok(Subtask {
+                    id: row.get(0)?,
+                    parent_ticket_id: row.get(1)?,
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    completed: completed != 0,
+                    position: row.get(5)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                })
+            },
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(format!("Subtask {} not found", id)))?;
+
+    Ok(subtask)
+}
+
+#[tauri::command]
+pub fn reorder_subtasks(db: State<Database>, subtask_ids: Vec<String>) -> Result<(), String> {
+    let conn = db.connection();
+    let mut conn = conn.lock().unwrap();
+
+    let tx = conn.savepoint().map_err(AppError::from)?;
+
+    for (position, subtask_id) in subtask_ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE subtasks SET position = ?1 WHERE id = ?2",
+            rusqlite::params![position as i32, subtask_id],
+        )
+        .map_err(AppError::from)?;
+    }
+
+    tx.commit().map_err(AppError::from)?;
+
+    Ok(())
+}

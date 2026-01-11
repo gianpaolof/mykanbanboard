@@ -15,6 +15,9 @@ import type {
   BoardListItem,
   BoardCreate,
   BoardUpdate,
+  Subtask,
+  SubtaskCreate,
+  SubtaskUpdate,
 } from '@/types';
 
 // ===========================================
@@ -171,6 +174,46 @@ export const labelApi = {
 };
 
 // ===========================================
+// SUBTASK API
+// ===========================================
+
+export const subtaskApi = {
+  /**
+   * Get all subtasks for a ticket
+   */
+  getSubtasks: (parentTicketId: string) =>
+    invoke<Subtask[]>('get_subtasks', { parentTicketId }),
+
+  /**
+   * Create a new subtask
+   */
+  createSubtask: (subtask: SubtaskCreate) =>
+    invoke<Subtask>('create_subtask', { subtask }),
+
+  /**
+   * Update a subtask
+   */
+  updateSubtask: (id: string, updates: SubtaskUpdate) =>
+    invoke<Subtask>('update_subtask', { id, updates }),
+
+  /**
+   * Delete a subtask
+   */
+  deleteSubtask: (id: string) => invoke<void>('delete_subtask', { id }),
+
+  /**
+   * Toggle subtask completion status
+   */
+  toggleSubtask: (id: string) => invoke<Subtask>('toggle_subtask', { id }),
+
+  /**
+   * Reorder subtasks by providing new order of IDs
+   */
+  reorderSubtasks: (subtaskIds: string[]) =>
+    invoke<void>('reorder_subtasks', { subtaskIds }),
+};
+
+// ===========================================
 // AGENT API
 // ===========================================
 
@@ -279,6 +322,7 @@ export const api = {
   columns: columnApi,
   tickets: ticketApi,
   labels: labelApi,
+  subtasks: subtaskApi,
   agent: agentApi,
 };
 

@@ -80,6 +80,13 @@ pub fn run() {
             commands::delete_label,
             commands::add_label_to_ticket,
             commands::remove_label_from_ticket,
+            // Subtask commands
+            commands::get_subtasks,
+            commands::create_subtask,
+            commands::update_subtask,
+            commands::delete_subtask,
+            commands::toggle_subtask,
+            commands::reorder_subtasks,
             // Agent commands
             agent::agent_triage,
             agent::agent_decompose,

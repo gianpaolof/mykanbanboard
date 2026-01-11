@@ -1,11 +1,11 @@
 // components/kanban/TicketModal.tsx
-import { useState, useCallback, useMemo, memo } from 'react';
+import { useState, useCallback, useMemo, memo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, GitBranch, Trash2, Check, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { api } from '@/lib/tauri';
-import { useBoardStore } from '@/stores/boardStore';
-import type { Ticket, Effort, Priority } from '@/types';
+import { api, subtaskApi } from '@/lib/tauri';
+import { SubtaskList } from './SubtaskList';
+import type { Ticket, Effort, Priority, Subtask } from '@/types';
 import type { AgentTriageResult } from '@/lib/tauri';
 
 interface SubtaskSuggestion {
@@ -47,8 +47,6 @@ export const TicketModal = memo(function TicketModal({
   onSave,
   onDelete,
 }: TicketModalProps) {
-  const { addTicket } = useBoardStore();
-
   // Form state
   const [description, setDescription] = useState(ticket.description || '');
   const [priority, setPriority] = useState<Priority | undefined>(ticket.priority);
@@ -63,6 +61,25 @@ export const TicketModal = memo(function TicketModal({
   const [isDecomposing, setIsDecomposing] = useState(false);
   const [decomposeResult, setDecomposeResult] = useState<SubtaskSuggestion[] | null>(null);
   const [isCreatingSubtasks, setIsCreatingSubtasks] = useState(false);
+
+  // Subtasks state
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [isLoadingSubtasks, setIsLoadingSubtasks] = useState(true);
+
+  // Load subtasks on mount
+  useEffect(() => {
+    const loadSubtasks = async () => {
+      try {
+        const loadedSubtasks = await subtaskApi.getSubtasks(ticket.id);
+        setSubtasks(loadedSubtasks);
+      } catch (error) {
+        console.error('Failed to load subtasks:', error);
+      } finally {
+        setIsLoadingSubtasks(false);
+      }
+    };
+    loadSubtasks();
+  }, [ticket.id]);
 
   // Handle AI Triage
   const handleAITriage = useCallback(async () => {
@@ -152,24 +169,27 @@ export const TicketModal = memo(function TicketModal({
     setIsCreatingSubtasks(true);
 
     try {
+      const newSubtasks: Subtask[] = [];
       for (const subtask of selectedSubtasks) {
-        await addTicket({
+        const created = await subtaskApi.createSubtask({
+          parentTicketId: ticket.id,
           title: subtask.title,
           description: subtask.description,
-          effort: subtask.effort as Effort | undefined,
-          columnId: ticket.columnId,
         });
+        newSubtasks.push(created);
       }
 
-      // Close modal after creating subtasks
-      onClose();
+      // Update local subtasks state
+      setSubtasks((prev) => [...prev, ...newSubtasks]);
+      // Clear decompose result
+      setDecomposeResult(null);
     } catch (error) {
       console.error('Failed to create subtasks:', error);
       // TODO: Show error toast
     } finally {
       setIsCreatingSubtasks(false);
     }
-  }, [decomposeResult, addTicket, ticket.columnId, onClose]);
+  }, [decomposeResult, ticket.id]);
 
   const cancelDecompose = useCallback(() => {
     setDecomposeResult(null);
@@ -470,6 +490,22 @@ export const TicketModal = memo(function TicketModal({
                   + Add label
                 </button>
               </div>
+            </div>
+
+            {/* Subtasks */}
+            <div className="border-t border-zinc-800 pt-4">
+              {isLoadingSubtasks ? (
+                <div className="flex items-center gap-2 text-zinc-500 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading subtasks...
+                </div>
+              ) : (
+                <SubtaskList
+                  ticketId={ticket.id}
+                  subtasks={subtasks}
+                  onSubtasksChange={setSubtasks}
+                />
+              )}
             </div>
 
             {/* Decompose Results */}

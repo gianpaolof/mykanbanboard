@@ -69,7 +69,7 @@ export function useKanbanShortcuts(handlers: {
   onCreateTicket: () => void;
   onOpenAI: () => void;
   onDailySummary?: () => void;
-  onSwitchView: (view: 'board' | 'list' | 'timeline') => void;
+  onSwitchView: (view: 'board' | 'list' | 'timeline' | 'calendar') => void;
   onOpenSettings?: () => void;
   onToggleSidebar?: () => void;
 }) {
@@ -115,6 +115,11 @@ export function useKanbanShortcuts(handlers: {
       key: '3',
       metaKey: true,
       callback: () => handlers.onSwitchView('timeline'),
+    },
+    {
+      key: '4',
+      metaKey: true,
+      callback: () => handlers.onSwitchView('calendar'),
     },
 
     // Settings
