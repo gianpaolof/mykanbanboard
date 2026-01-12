@@ -4,7 +4,7 @@ from typing import Any
 import logging
 import asyncio
 from functools import wraps
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 
 from ..agent.modules import (
@@ -14,6 +14,10 @@ from ..agent.modules import (
     ActionDeciderModule,
     RuleParserModule,
 )
+from ..agent.judge import TicketQualityJudge
+from ..agent.multihop import MultiHopTicketAnalyzer
+from ..agent.analytics import analytics
+from ..agent.suggester import suggester
 from ..db.chroma import ChromaManager
 from .models import (
     TriageRequest,
@@ -29,7 +33,14 @@ from .models import (
     TicketSummary,
     ParseRuleRequest,
     ParseRuleResponse,
+    JudgeRequest,
+    JudgeResponse,
+    AnalyzeRequest,
+    AnalyzeResponse,
     ErrorResponse,
+    SuggestionsRequest,
+    SuggestionsResponse,
+    Suggestion,
 )
 
 logger = logging.getLogger(__name__)
@@ -550,4 +561,321 @@ async def parse_automation_rule(request: ParseRuleRequest) -> ParseRuleResponse:
         raise HTTPException(
             status_code=500,
             detail=f"Parse rule failed: {str(e)}",
+        )
+
+
+# ============================================================================
+# JUDGE ENDPOINT
+# ============================================================================
+
+JUDGE_TIMEOUT = 15
+
+
+@router.post(
+    "/agent/judge",
+    response_model=JudgeResponse,
+    summary="Judge ticket quality",
+    description="Evaluate ticket quality using LLM-as-Judge pattern",
+)
+async def judge_ticket(request: JudgeRequest) -> JudgeResponse:
+    """Judge the quality of a ticket.
+
+    Args:
+        request: Judge request with ticket details
+
+    Returns:
+        Quality scores and feedback
+
+    Raises:
+        HTTPException: If judging fails
+    """
+    try:
+        logger.info(f"Judging ticket: {request.title[:50]}...")
+
+        judge = TicketQualityJudge()
+
+        # Run DSPy module with timeout
+        def run_judge():
+            return judge(
+                ticket_title=request.title,
+                ticket_description=request.description,
+                priority=request.priority,
+                effort=request.effort,
+                labels=",".join(request.labels)
+            )
+
+        result = await run_sync_with_timeout(run_judge, JUDGE_TIMEOUT, "Judge")
+
+        # Extract values
+        clarity = int(extract_value(result.clarity_score))
+        completeness = int(extract_value(result.completeness_score))
+        actionability = int(extract_value(result.actionability_score))
+        feedback = extract_value(result.feedback)
+
+        return JudgeResponse(
+            clarity_score=clarity,
+            completeness_score=completeness,
+            actionability_score=actionability,
+            feedback=feedback,
+            overall_score=(clarity + completeness + actionability) / 3
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Judge failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Judge failed: {str(e)}",
+        )
+
+
+# ============================================================================
+# ANALYZE ENDPOINT
+# ============================================================================
+
+ANALYZE_TIMEOUT = 60
+
+
+@router.post(
+    "/agent/analyze",
+    response_model=AnalyzeResponse,
+    summary="Multi-hop ticket analysis",
+    description="Analyze a ticket using multi-hop reasoning for deep insights",
+)
+async def analyze_ticket(request: AnalyzeRequest) -> AnalyzeResponse:
+    """Analyze a ticket using multi-hop reasoning.
+
+    Args:
+        request: Analyze request with ticket details
+
+    Returns:
+        Analysis with context, patterns, insights, recommendations
+
+    Raises:
+        HTTPException: If analysis fails
+    """
+    try:
+        logger.info(f"Analyzing ticket: {request.title[:50]}...")
+
+        analyzer = MultiHopTicketAnalyzer()
+
+        # Run multi-hop analysis with extended timeout
+        def run_analyze():
+            return analyzer(
+                ticket_title=request.title,
+                ticket_description=request.description,
+                similar_tickets="[]"  # TODO: Integrate with ChromaDB for similar tickets
+            )
+
+        result = await run_sync_with_timeout(run_analyze, ANALYZE_TIMEOUT, "Analyze")
+
+        # Extract values
+        return AnalyzeResponse(
+            context_summary=extract_value(result.get("context_summary", "")),
+            key_themes=extract_value(result.get("key_themes", [])),
+            patterns=extract_value(result.get("patterns", [])),
+            dependencies=extract_value(result.get("dependencies", "")),
+            insights=extract_value(result.get("insights", "")),
+            recommendations=extract_value(result.get("recommendations", "")),
+            complexity=extract_value(result.get("complexity", "medium"))
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Analyze failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analyze failed: {str(e)}",
+        )
+
+
+# ============================================================================
+# STATS ENDPOINT
+# ============================================================================
+
+
+@router.get(
+    "/agent/stats",
+    summary="Get agent statistics",
+    description="Get aggregated statistics for agent calls",
+)
+async def get_agent_stats(
+    period: str = Query("day", pattern="^(hour|day|week)$")
+) -> dict:
+    """Get agent statistics for a time period.
+
+    Args:
+        period: Time period - "hour", "day", or "week"
+
+    Returns:
+        Statistics including total_calls, avg_latency_ms, success_rate, total_tokens
+    """
+    try:
+        stats = analytics.get_stats(period=period)
+        return {
+            **stats,
+            "period": period,
+        }
+    except Exception as e:
+        logger.error(f"Stats failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Stats failed: {str(e)}",
+        )
+
+
+@router.get(
+    "/agent/stats/modules",
+    summary="Get per-module statistics",
+    description="Get statistics broken down by module",
+)
+async def get_module_stats(
+    period: str = Query("day", pattern="^(hour|day|week)$")
+) -> dict:
+    """Get statistics broken down by module.
+
+    Args:
+        period: Time period - "hour", "day", or "week"
+
+    Returns:
+        Per-module statistics
+    """
+    try:
+        modules = analytics.get_module_breakdown(period=period)
+        return {
+            "modules": modules,
+            "period": period,
+        }
+    except Exception as e:
+        logger.error(f"Module stats failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Module stats failed: {str(e)}",
+        )
+
+
+@router.get(
+    "/agent/stats/hourly",
+    summary="Get hourly breakdown",
+    description="Get statistics broken down by hour",
+)
+async def get_hourly_stats(
+    hours: int = Query(24, ge=1, le=168)
+) -> dict:
+    """Get hourly statistics breakdown.
+
+    Args:
+        hours: Number of hours to look back (max 168 = 1 week)
+
+    Returns:
+        Hourly statistics
+    """
+    try:
+        hourly = analytics.get_hourly_breakdown(hours=hours)
+        return {
+            "hourly": hourly,
+            "hours_requested": hours,
+        }
+    except Exception as e:
+        logger.error(f"Hourly stats failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Hourly stats failed: {str(e)}",
+        )
+
+
+@router.get(
+    "/agent/stats/errors",
+    summary="Get recent errors",
+    description="Get recent failed agent calls",
+)
+async def get_recent_errors(
+    limit: int = Query(10, ge=1, le=100)
+) -> dict:
+    """Get recent failed calls.
+
+    Args:
+        limit: Maximum number of errors to return
+
+    Returns:
+        Recent error details
+    """
+    try:
+        errors = analytics.get_recent_errors(limit=limit)
+        return {
+            "errors": errors,
+            "count": len(errors),
+        }
+    except Exception as e:
+        logger.error(f"Error stats failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error stats failed: {str(e)}",
+        )
+
+
+# ============================================================================
+# SUGGESTIONS ENDPOINT
+# ============================================================================
+
+
+@router.post(
+    "/agent/suggestions",
+    response_model=SuggestionsResponse,
+    summary="Get proactive suggestions",
+    description="Get proactive suggestions for improving the board",
+)
+async def get_suggestions(
+    request: SuggestionsRequest,
+    deep: bool = Query(False, description="Use LLM for deeper analysis"),
+) -> SuggestionsResponse:
+    """Get proactive suggestions for the board.
+
+    Args:
+        request: Board state with columns and tickets
+        deep: If True, use LLM for deeper analysis (slower)
+
+    Returns:
+        List of prioritized suggestions
+    """
+    try:
+        # Convert Pydantic models to dicts
+        columns = [col.model_dump() for col in request.columns]
+        tickets = [ticket.model_dump() for ticket in request.tickets]
+
+        if deep:
+            # Use LLM-based analysis (slower but more insightful)
+            raw_suggestions = suggester.get_suggestions(
+                columns=columns,
+                tickets=tickets,
+            )
+        else:
+            # Use rule-based quick analysis
+            raw_suggestions = suggester.quick_analysis(
+                tickets=tickets,
+                columns=columns,
+            )
+
+        # Convert to response model
+        suggestions = [
+            Suggestion(
+                type=s.get("type", "stale_ticket"),
+                message=s.get("message", ""),
+                action=s.get("action", ""),
+                priority=s.get("priority", "medium"),
+                ticket_id=s.get("ticket_id"),
+                column_id=s.get("column_id"),
+            )
+            for s in raw_suggestions
+        ]
+
+        return SuggestionsResponse(suggestions=suggestions)
+
+    except Exception as e:
+        logger.error(f"Suggestions failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Suggestions failed: {str(e)}",
         )

@@ -188,6 +188,55 @@ class ParseRuleResponse(BaseModel):
 
 
 # ============================================================================
+# JUDGE MODELS
+# ============================================================================
+
+
+class JudgeRequest(BaseModel):
+    """Request model for ticket quality judgment."""
+
+    title: str = Field(..., min_length=1, description="Ticket title")
+    description: str = Field(default="", description="Ticket description")
+    priority: str = Field(default="medium", description="Priority level")
+    effort: str = Field(default="m", description="Effort estimate")
+    labels: list[str] = Field(default_factory=list, description="Ticket labels")
+
+
+class JudgeResponse(BaseModel):
+    """Response model for ticket quality judgment."""
+
+    clarity_score: int = Field(..., ge=0, le=10)
+    completeness_score: int = Field(..., ge=0, le=10)
+    actionability_score: int = Field(..., ge=0, le=10)
+    feedback: str
+    overall_score: float = Field(..., ge=0.0, le=10.0)
+
+
+# ============================================================================
+# ANALYZE MODELS
+# ============================================================================
+
+
+class AnalyzeRequest(BaseModel):
+    """Request model for multi-hop ticket analysis."""
+
+    title: str = Field(..., min_length=1, description="Ticket title")
+    description: str = Field(default="", description="Ticket description")
+
+
+class AnalyzeResponse(BaseModel):
+    """Response model for multi-hop ticket analysis."""
+
+    context_summary: str
+    key_themes: list[str]
+    patterns: list[str]
+    dependencies: str
+    insights: str
+    recommendations: str
+    complexity: str
+
+
+# ============================================================================
 # ERROR MODELS
 # ============================================================================
 
@@ -198,3 +247,51 @@ class ErrorResponse(BaseModel):
     error: str
     message: str
     details: dict = Field(default_factory=dict)
+
+
+# ============================================================================
+# SUGGESTIONS MODELS
+# ============================================================================
+
+
+class ColumnInfo(BaseModel):
+    """Column information for suggestions."""
+
+    id: str
+    name: str
+    position: int = 0
+
+
+class TicketInfo(BaseModel):
+    """Ticket information for suggestions."""
+
+    id: str
+    title: str
+    column_id: str
+    priority: str = "medium"
+    effort: str = "m"
+    labels: list[str] = Field(default_factory=list)
+
+
+class SuggestionsRequest(BaseModel):
+    """Request model for proactive suggestions."""
+
+    columns: list[ColumnInfo] = Field(default_factory=list)
+    tickets: list[TicketInfo] = Field(default_factory=list)
+
+
+class Suggestion(BaseModel):
+    """A single suggestion item."""
+
+    type: str
+    message: str
+    action: str = ""
+    priority: str = "medium"
+    ticket_id: str | None = None
+    column_id: str | None = None
+
+
+class SuggestionsResponse(BaseModel):
+    """Response model for proactive suggestions."""
+
+    suggestions: list[Suggestion]

@@ -163,6 +163,130 @@ class DecomposeModule(dspy.Module):
         super().__init__()
         self.decompose = dspy.ChainOfThought(DecomposeTask)
 
+
+# ============================================================================
+# BEST-OF-N DECOMPOSE MODULE
+# ============================================================================
+
+
+def score_decomposition(subtasks: list[dict]) -> float:
+    """Score a decomposition result for quality.
+
+    Scoring criteria:
+    - +2 points for each subtask with title and description
+    - +1 point if effort is valid (xs/s/m/l/xl)
+    - -1 point for subtasks too vague (title < 10 chars)
+    - -2 points if > 7 subtasks (too granular)
+
+    Args:
+        subtasks: List of subtask dictionaries
+
+    Returns:
+        Quality score (higher is better)
+    """
+    score = 0.0
+
+    for task in subtasks:
+        # +2 for having both title and description
+        if task.get("title") and task.get("description"):
+            score += 2.0
+        elif task.get("title"):
+            score += 1.0  # Partial credit for title only
+
+        # +1 for valid effort estimate
+        if task.get("effort") in VALID_EFFORTS:
+            score += 1.0
+
+        # -1 for vague titles
+        if len(task.get("title", "")) < 10:
+            score -= 1.0
+
+    # -2 for too many subtasks
+    if len(subtasks) > 7:
+        score -= 2.0
+
+    # Bonus for optimal range (3-5 subtasks)
+    if 3 <= len(subtasks) <= 5:
+        score += 1.0
+
+    return score
+
+
+class BestOfNDecompose(dspy.Module):
+    """Module that generates N decomposition candidates and selects the best.
+
+    Uses a reward function to score each candidate decomposition
+    and returns the highest-scoring result.
+    """
+
+    def __init__(self, n_candidates: int = 3):
+        super().__init__()
+        self.n_candidates = n_candidates
+        self.decompose = dspy.ChainOfThought(DecomposeTask)
+
+    def forward(self, title: str, description: str, context: str = ""):
+        """Generate multiple decompositions and return the best one.
+
+        Args:
+            title: Task title
+            description: Task description
+            context: Additional board context
+
+        Returns:
+            Best decomposition result with subtasks, dependencies, reasoning, and score
+        """
+        candidates = []
+
+        for _ in range(self.n_candidates):
+            try:
+                result = self.decompose(
+                    title=title,
+                    description=description,
+                    context=context or "No additional context",
+                )
+
+                # Extract subtasks from result
+                subtasks = result.subtasks if isinstance(result.subtasks, list) else []
+
+                # Validate subtasks
+                valid_subtasks = []
+                for subtask in subtasks:
+                    if isinstance(subtask, dict) and subtask.get("title"):
+                        valid_subtasks.append(subtask)
+
+                if valid_subtasks:
+                    score = score_decomposition(valid_subtasks)
+                    candidates.append({
+                        "score": score,
+                        "result": result,
+                        "subtasks": valid_subtasks,
+                        "dependencies": result.dependencies if hasattr(result, "dependencies") else [],
+                        "reasoning": result.reasoning if hasattr(result, "reasoning") else "",
+                    })
+            except Exception:
+                # Skip failed decomposition attempts
+                continue
+
+        # Return best candidate or raise error if none succeeded
+        if not candidates:
+            dspy.Assert(False, "All decomposition attempts failed")
+
+        best = max(candidates, key=lambda x: x["score"])
+
+        # Validate the best result
+        dspy.Assert(
+            len(best["subtasks"]) >= 2,
+            f"Best decomposition has too few subtasks ({len(best['subtasks'])})",
+        )
+
+        return {
+            "subtasks": best["subtasks"],
+            "dependencies": best["dependencies"],
+            "reasoning": best["reasoning"],
+            "score": best["score"],
+            "candidates_evaluated": len(candidates),
+        }
+
     def forward(self, title: str, description: str, context: str = ""):
         """Decompose a task into subtasks.
 
