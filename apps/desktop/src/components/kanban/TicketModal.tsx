@@ -5,6 +5,7 @@ import { X, Sparkles, GitBranch, Trash2, Check, Loader2, XCircle } from 'lucide-
 import { cn } from '@/lib/utils';
 import { api, subtaskApi } from '@/lib/tauri';
 import { SubtaskList } from './SubtaskList';
+import { TicketQualityBadge, TicketAnalysisPanel } from '@/components/ai';
 import type { Ticket, Effort, Priority, Subtask } from '@/types';
 import type { AgentTriageResult } from '@/lib/tauri';
 
@@ -251,12 +252,22 @@ export const TicketModal = memo(function TicketModal({
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-zinc-800">
             <h2 className="font-bold text-lg">{ticket.title}</h2>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Quality Badge */}
+              <TicketQualityBadge
+                ticketTitle={ticket.title}
+                ticketDescription={description || ticket.description || ''}
+                priority={priority || ticket.priority || 'medium'}
+                effort={effort || ticket.effort || 'm'}
+                labels={ticket.labels.map(l => l.name)}
+              />
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Body */}
@@ -506,6 +517,14 @@ export const TicketModal = memo(function TicketModal({
                   onSubtasksChange={setSubtasks}
                 />
               )}
+            </div>
+
+            {/* Deep Analysis Panel */}
+            <div className="border-t border-zinc-800 pt-4">
+              <TicketAnalysisPanel
+                ticketTitle={ticket.title}
+                ticketDescription={description || ticket.description || ''}
+              />
             </div>
 
             {/* Decompose Results */}

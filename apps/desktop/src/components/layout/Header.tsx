@@ -7,6 +7,7 @@ import {
   Calendar,
   Sparkles,
   Settings,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -20,6 +21,7 @@ interface HeaderProps {
   ticketCount?: number;
   lastUpdated?: string;
   onAIClick?: () => void;
+  onStatsClick?: () => void;
   onSettingsClick?: () => void;
   onViewChange?: (view: ViewMode) => void;
   currentView?: ViewMode;
@@ -33,6 +35,7 @@ export const Header = memo(function Header({
   ticketCount = 0,
   lastUpdated = 'just now',
   onAIClick,
+  onStatsClick,
   onSettingsClick,
   onViewChange,
   currentView = 'board',
@@ -120,6 +123,28 @@ export const Header = memo(function Header({
 
         {/* Theme Toggle */}
         <ThemeToggle />
+
+        {/* Stats Button */}
+        <button
+          onClick={onStatsClick}
+          className={cn(
+            // Layout
+            'flex items-center justify-center w-8 h-8 rounded-lg',
+            // Styling
+            'bg-bg-elevated border border-border-subtle',
+            'text-text-tertiary',
+            // Interaction
+            'transition-all duration-200',
+            'hover:bg-bg-hover hover:text-indigo-400 hover:border-indigo-500/50',
+            'active:bg-bg-active',
+            // Focus
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:border-accent'
+          )}
+          aria-label="Agent Stats"
+          title="Agent Stats"
+        >
+          <BarChart3 className="w-4 h-4" />
+        </button>
 
         {/* AI Button */}
         <button
