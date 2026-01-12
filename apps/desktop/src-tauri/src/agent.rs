@@ -82,19 +82,17 @@ pub fn start_agent(app: &AppHandle) -> Result<(), String> {
 
     // Determine agent path based on dev vs production
     let agent_path = if cfg!(dev) {
-        // In dev mode, use relative path from project root
-        let app_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("Failed to get app dir: {}", e))?;
+        // In dev mode, use CARGO_MANIFEST_DIR to find the project root
+        // CARGO_MANIFEST_DIR points to apps/desktop/src-tauri during build
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-        // Navigate up from app data dir to project root
-        app_dir
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.parent())
+        // Navigate up from src-tauri to project root (kanban/)
+        manifest_dir
+            .parent() // apps/desktop
+            .and_then(|p| p.parent()) // apps
+            .and_then(|p| p.parent()) // kanban (project root)
             .map(|p| p.join("services/agent"))
-            .ok_or_else(|| "Failed to resolve agent path".to_string())?
+            .ok_or_else(|| "Failed to resolve agent path from CARGO_MANIFEST_DIR".to_string())?
     } else {
         // In production, bundle the agent with the app
         app.path()

@@ -19,7 +19,7 @@ export const EmptyColumn = memo(function EmptyColumn({
       variants={fadeInUp}
       initial="hidden"
       animate="visible"
-      className="flex flex-col items-center justify-center py-12 px-4 text-center"
+      className="flex flex-col items-center py-8 px-4 text-center"
     >
       {/* Glass card with icon */}
       <div

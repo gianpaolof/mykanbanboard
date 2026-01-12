@@ -188,7 +188,7 @@ export const KanbanBoard = memo(function KanbanBoard({ onAddTicket, filteredTick
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 h-full overflow-x-auto p-4">
+        <div className="flex items-start gap-4 h-full overflow-x-auto overflow-y-hidden p-4 pb-6 scrollbar-thin">
           {sortedColumns.map((column) => (
             <KanbanColumn
               key={column.id}

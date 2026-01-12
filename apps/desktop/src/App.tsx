@@ -6,7 +6,7 @@ import { CreateTicketModal } from '@/components/kanban/CreateTicketModal';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { CommandPalette } from '@/components/layout/CommandPalette';
-import { AgentChat } from '@/components/ai/AgentChat';
+import { AgentChat, AgentStatsPanel } from '@/components/ai';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { CreateBoardModal } from '@/components/boards/CreateBoardModal';
 import { Toaster } from '@/components/ui/Toaster';
@@ -23,6 +23,7 @@ function App() {
   // UI State
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [statsPanelOpen, setStatsPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createTicketOpen, setCreateTicketOpen] = useState(false);
   const [createBoardOpen, setCreateBoardOpen] = useState(false);
@@ -104,6 +105,7 @@ function App() {
       if (e.key === 'Escape') {
         setCommandPaletteOpen(false);
         setAiPanelOpen(false);
+        setStatsPanelOpen(false);
         setSettingsOpen(false);
         setCreateTicketOpen(false);
         setCreateBoardOpen(false);
@@ -116,7 +118,7 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-bg-primary">
+      <div className="h-full w-full flex items-center justify-center bg-bg-primary">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
           <div className="text-text-tertiary text-sm">Loading board...</div>
@@ -126,7 +128,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-bg-primary flex">
+    <div className="h-full w-full overflow-hidden bg-bg-primary flex">
       {/* Sidebar */}
       <Sidebar />
 
@@ -136,6 +138,7 @@ function App() {
         <Header
           ticketCount={ticketCount}
           onAIClick={() => setAiPanelOpen(true)}
+          onStatsClick={() => setStatsPanelOpen(true)}
           onSettingsClick={handleSettings}
           onViewChange={handleSwitchView}
           filter={filter}
@@ -169,6 +172,12 @@ function App() {
       <AgentChat
         isOpen={aiPanelOpen}
         onClose={() => setAiPanelOpen(false)}
+      />
+
+      {/* Agent Stats Panel */}
+      <AgentStatsPanel
+        open={statsPanelOpen}
+        onClose={() => setStatsPanelOpen(false)}
       />
 
       {/* Settings Modal */}

@@ -16,12 +16,15 @@
         "title": "Kanban AI",
         "width": 1400,
         "height": 900,
-        "minWidth": 1024,
-        "minHeight": 768,
+        "minWidth": 800,
+        "minHeight": 400,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "transparent": false
+        "transparent": false,
+        "maximizable": true,
+        "minimizable": true,
+        "center": true
       }
     ],
     "security": {

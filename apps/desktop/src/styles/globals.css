@@ -110,7 +110,6 @@
     color: var(--text-primary);
     @apply font-sans;
     line-height: 1.5;
-    min-height: 100vh;
     overflow: hidden;
   }
 
@@ -282,6 +281,25 @@
 }
 
 @layer utilities {
+  /* Scrollbar utilities */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: var(--scrollbar-thumb);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
   /* Text utilities */
   .text-balance {
     text-wrap: balance;

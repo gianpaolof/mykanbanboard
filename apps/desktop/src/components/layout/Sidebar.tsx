@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from 'react';
+import { useState, useCallback, useMemo, memo, useRef, useEffect } from 'react';
 import {
   Zap,
   LayoutGrid,
@@ -8,10 +8,21 @@ import {
   User,
   Clock,
   Plus,
+  GripVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBoardStore, selectBoards } from '@/stores/boardStore';
 import { BoardItem, CreateBoardModal } from '@/components/boards';
+import type { Ticket } from '@/types';
+
+// ===========================================
+// RESIZE CONSTANTS
+// ===========================================
+
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 400;
+const DEFAULT_WIDTH = 256; // w-64
+const STORAGE_KEY = 'kanban-sidebar-width';
 
 // ===========================================
 // TYPES
@@ -43,10 +54,28 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'timeline', label: 'Timeline', icon: Calendar },
 ];
 
-const FILTER_ITEMS: FilterItem[] = [
-  { id: 'all', label: 'All Tickets', icon: Inbox, badge: 24 },
-  { id: 'my', label: 'My Tickets', icon: User, badge: 8 },
-  { id: 'due-soon', label: 'Due Soon', icon: Clock, badge: 3 },
+// Helper to count tickets due within next 7 days
+const countDueSoon = (tickets: Ticket[]): number => {
+  const now = new Date();
+  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return tickets.filter((t) => {
+    if (!t.dueDate) return false;
+    const due = new Date(t.dueDate);
+    return due >= now && due <= weekFromNow;
+  }).length;
+};
+
+// Helper to count tickets assigned to current user
+// TODO: Implement when user/assignee system is added to Ticket type
+const countMyTickets = (_tickets: Ticket[]): number => {
+  // No assignee field exists yet - return 0 until implemented
+  return 0;
+};
+
+const createFilterItems = (allTickets: Ticket[]): FilterItem[] => [
+  { id: 'all', label: 'All Tickets', icon: Inbox, badge: allTickets.length },
+  { id: 'my', label: 'My Tickets', icon: User, badge: countMyTickets(allTickets) },
+  { id: 'due-soon', label: 'Due Soon', icon: Clock, badge: countDueSoon(allTickets) },
 ];
 
 // ===========================================
@@ -119,11 +148,13 @@ const ViewsSection = memo(function ViewsSection({
 interface FiltersSectionProps {
   activeFilter: FilterItemType | null;
   onFilterChange: (filter: FilterItemType | null) => void;
+  filterItems: FilterItem[];
 }
 
 const FiltersSection = memo(function FiltersSection({
   activeFilter,
   onFilterChange,
+  filterItems,
 }: FiltersSectionProps) {
   return (
     <div className="px-3 py-4 border-t border-sidebar-border">
@@ -131,7 +162,7 @@ const FiltersSection = memo(function FiltersSection({
         Filters
       </h2>
       <nav className="space-y-1">
-        {FILTER_ITEMS.map((item) => {
+        {filterItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeFilter === item.id;
 
@@ -177,10 +208,66 @@ export function Sidebar() {
   const currentBoardId = useBoardStore((state) => state.currentBoardId);
   const switchBoard = useBoardStore((state) => state.switchBoard);
   const labels = useBoardStore((state) => state.labels);
+  const tickets = useBoardStore((state) => state.tickets);
+
+  // Flatten all tickets for counting
+  const allTickets = useMemo(() => {
+    return Object.values(tickets).flat();
+  }, [tickets]);
+
+  // Create filter items with dynamic counts
+  const filterItems = useMemo(() => {
+    return createFilterItems(allTickets);
+  }, [allTickets]);
 
   const [activeView, setActiveView] = useState<NavItemType>('board');
   const [activeFilter, setActiveFilter] = useState<FilterItemType | null>(null);
   const [isCreateBoardOpen, setIsCreateBoardOpen] = useState(false);
+
+  // Resize state
+  const [width, setWidth] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  // Save width to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, width.toString());
+  }, [width]);
+
+  // Handle resize
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, e.clientX));
+      setWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   const handleViewChange = useCallback((view: NavItemType) => {
     setActiveView(view);
@@ -213,7 +300,11 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="w-64 h-screen bg-sidebar-bg border-r border-sidebar-border flex flex-col">
+      <aside
+        ref={sidebarRef}
+        style={{ width }}
+        className="relative h-full bg-sidebar-bg border-r border-sidebar-border flex flex-col flex-shrink-0"
+      >
         <LogoSection />
 
         {/* Navigation */}
@@ -251,6 +342,7 @@ export function Sidebar() {
           <FiltersSection
             activeFilter={activeFilter}
             onFilterChange={handleFilterChange}
+            filterItems={filterItems}
           />
 
           {/* Labels Section */}
@@ -272,6 +364,26 @@ export function Sidebar() {
                 </button>
               ))}
             </nav>
+          </div>
+        </div>
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleMouseDown}
+          className={cn(
+            'absolute top-0 right-0 w-1 h-full cursor-col-resize group',
+            'hover:bg-indigo-500/50 transition-colors',
+            isResizing && 'bg-indigo-500'
+          )}
+        >
+          {/* Visual indicator on hover */}
+          <div
+            className={cn(
+              'absolute top-1/2 -translate-y-1/2 -right-1 opacity-0 group-hover:opacity-100 transition-opacity',
+              isResizing && 'opacity-100'
+            )}
+          >
+            <GripVertical className="w-3 h-3 text-text-muted" />
           </div>
         </div>
       </aside>
