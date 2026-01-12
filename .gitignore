@@ -48,3 +48,15 @@ coverage/
 
 # Misc
 *.tsbuildinfo
+
+# Ralph runtime files
+.call_count
+.circuit_breaker_history
+.circuit_breaker_state
+.exit_signals
+.last_reset
+.ralph_session
+.ralph_session_history
+.response_analysis
+progress.json
+status.json
