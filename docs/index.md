@@ -99,38 +99,9 @@ graph TB
 
 ## Prossimi Passi
 
-<div class="grid cards" markdown>
-
--   :material-download:{ .lg .middle } **Installation**
-
-    ---
-
-    Guida completa all'installazione su tutti i sistemi operativi
-
-    [:octicons-arrow-right-24: Getting Started](getting-started/installation.md)
-
--   :material-brain:{ .lg .middle } **DSPy Guide**
-
-    ---
-
-    Impara come funziona l'AI agent e come personalizzarlo
-
-    [:octicons-arrow-right-24: DSPy Guide](dspy-guide/introduction.md)
-
--   :material-api:{ .lg .middle } **API Reference**
-
-    ---
-
-    Documentazione completa delle API REST e Tauri
-
-    [:octicons-arrow-right-24: API Reference](api-reference/rest-api.md)
-
--   :material-code-braces:{ .lg .middle } **Contributing**
-
-    ---
-
-    Come contribuire al progetto
-
-    [:octicons-arrow-right-24: Development](development/contributing.md)
-
-</div>
+| Sezione | Descrizione |
+|---------|-------------|
+| [**Installation**](getting-started/installation.md) | Guida completa all'installazione su tutti i sistemi operativi |
+| [**DSPy Guide**](dspy-guide/introduction.md) | Impara come funziona l'AI agent e come personalizzarlo |
+| [**API Reference**](api-reference/rest-api.md) | Documentazione completa delle API REST e Tauri |
+| [**Contributing**](development/contributing.md) | Come contribuire al progetto |
