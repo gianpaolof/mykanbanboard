@@ -313,19 +313,47 @@ should_exit_gracefully() {
         return 0
     fi
     
-    # 2. Multiple "done" signals
-    if [[ $recent_done_signals -ge $MAX_CONSECUTIVE_DONE_SIGNALS ]]; then
-        log_status "WARN" "Exit condition: Multiple completion signals ($recent_done_signals >= $MAX_CONSECUTIVE_DONE_SIGNALS)"
+    # 2. Multiple "done" signals (FIXED v2: require higher threshold for text output)
+    # done_signals are based on keyword detection which has false positives
+    # Increase threshold significantly to avoid premature exit
+    local effective_done_threshold=$MAX_CONSECUTIVE_DONE_SIGNALS
+    if [[ -f ".response_analysis" ]]; then
+        local current_format=$(jq -r '.output_format // "text"' ".response_analysis" 2>/dev/null || echo "text")
+        if [[ "$current_format" != "json" ]]; then
+            # For text output, require 5x more signals to be confident
+            effective_done_threshold=$((MAX_CONSECUTIVE_DONE_SIGNALS * 5))
+        fi
+    fi
+    if [[ $recent_done_signals -ge $effective_done_threshold ]]; then
+        log_status "WARN" "Exit condition: Multiple completion signals ($recent_done_signals >= $effective_done_threshold)"
         echo "completion_signals"
         return 0
     fi
     
-    # 3. Strong completion indicators
-    if [[ $recent_completion_indicators -ge 2 ]]; then
-        log_status "WARN" "Exit condition: Strong completion indicators ($recent_completion_indicators)"
+    # 3. Strong completion indicators (FIXED v2: only trust EXPLICIT exit signals)
+    # The exit_signal in text-parsed output is unreliable (based on heuristics)
+    # Only trust exit_signal when output_format is "json" (explicit from Claude)
+    local claude_exit_signal="false"
+    local output_format="text"
+    if [[ -f ".response_analysis" ]]; then
+        claude_exit_signal=$(jq -r '.analysis.exit_signal // false' \
+            ".response_analysis" 2>/dev/null || echo "false")
+        output_format=$(jq -r '.output_format // "text"' \
+            ".response_analysis" 2>/dev/null || echo "text")
+    fi
+
+    # Only exit if: JSON format with explicit exit_signal=true
+    # Text format exit_signal is inferred from heuristics and NOT reliable
+    if [[ $recent_completion_indicators -ge 2 ]] && \
+       [[ "$claude_exit_signal" == "true" ]] && \
+       [[ "$output_format" == "json" ]]; then
+        log_status "WARN" "Exit condition: Strong indicators + explicit JSON EXIT_SIGNAL=true" >&2
         echo "project_complete"
         return 0
     fi
+
+    # For text output: require much higher threshold (ignore completion_indicators)
+    # This prevents false positives from words like "Complete" in progress updates
     
     # 4. Check fix_plan.md for completion
     if [[ -f "@fix_plan.md" ]]; then
