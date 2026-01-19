@@ -102,6 +102,11 @@ pub fn run() {
             agent::agent_daily_summary,
             agent::agent_search,
             agent::agent_health,
+            // Agent context/sync commands
+            agent::agent_sync_tickets,
+            agent::agent_sync_status,
+            agent::agent_invalidate_cache,
+            agent::agent_cache_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -256,13 +256,49 @@ export interface AgentSearchResult {
 }
 
 export interface AgentDailySummaryResult {
-  summary: string;
-  stats: {
-    total: number;
-    by_priority: Record<string, number>;
-    by_status: Record<string, number>;
-  };
+  greeting: string;
   focus_today: string[];
+  blockers: string[];
+  quick_wins: string[];
+}
+
+export interface DailySummaryTicket {
+  id: string;
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  labels?: string[];
+  due_date?: string;
+  column_id?: string;
+}
+
+export interface DailySummaryRequest {
+  in_progress: DailySummaryTicket[];
+  blocked: DailySummaryTicket[];
+  due_soon: DailySummaryTicket[];
+  recently_completed: DailySummaryTicket[];
+}
+
+export interface SyncTicketsRequest {
+  tickets: DailySummaryTicket[];
+  force_full_sync?: boolean;
+}
+
+export interface SyncStatus {
+  success: boolean;
+  synced_count: number;
+  total_count: number;
+  last_sync: string | null;
+}
+
+export interface CacheStats {
+  entries: number;
+  max_entries: number;
+  hits: number;
+  misses: number;
+  evictions: number;
+  hit_rate: number;
 }
 
 export const agentApi = {
@@ -297,9 +333,10 @@ export const agentApi = {
 
   /**
    * Generate daily summary of tickets
+   * Now requires actual ticket data for meaningful summaries
    */
-  dailySummary: () =>
-    invoke<AgentDailySummaryResult>('agent_daily_summary'),
+  dailySummary: (request: DailySummaryRequest) =>
+    invoke<AgentDailySummaryResult>('agent_daily_summary', { request }),
 
   /**
    * Semantic search for tickets
@@ -314,6 +351,33 @@ export const agentApi = {
    * Check if agent is available and healthy
    */
   health: () => invoke<boolean>('agent_health'),
+
+  /**
+   * Sync tickets to ChromaDB for semantic search
+   * Call this on app startup or when tickets change
+   */
+  syncTickets: (request: SyncTicketsRequest) =>
+    invoke<SyncStatus>('agent_sync_tickets', { request }),
+
+  /**
+   * Get ChromaDB sync status
+   */
+  getSyncStatus: () =>
+    invoke<SyncStatus>('agent_sync_status'),
+
+  /**
+   * Invalidate context cache
+   */
+  invalidateCache: (boardId?: string) =>
+    invoke<{ invalidated: number | string; board_id?: string }>('agent_invalidate_cache', {
+      boardId: boardId ?? null,
+    }),
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats: () =>
+    invoke<CacheStats>('agent_cache_stats'),
 };
 
 // ===========================================

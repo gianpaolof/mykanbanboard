@@ -238,6 +238,39 @@ struct SearchRequest {
     limit: Option<i32>,
 }
 
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct DailySummaryTicket {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub priority: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+    #[serde(default)]
+    pub column_id: String,
+}
+
+#[derive(Debug, Serialize, serde::Deserialize)]
+pub struct DailySummaryRequest {
+    pub in_progress: Vec<DailySummaryTicket>,
+    pub blocked: Vec<DailySummaryTicket>,
+    pub due_soon: Vec<DailySummaryTicket>,
+    pub recently_completed: Vec<DailySummaryTicket>,
+}
+
+#[derive(Debug, Serialize, serde::Deserialize)]
+pub struct SyncTicketsRequest {
+    pub tickets: Vec<DailySummaryTicket>,
+    #[serde(default)]
+    pub force_full_sync: bool,
+}
+
 // ===========================================
 // AGENT COMMANDS
 // ===========================================
@@ -367,13 +400,15 @@ pub async fn agent_chat(message: String, context: Option<Value>) -> Result<Value
 }
 
 /// Generate daily summary of tickets
+/// Now requires actual ticket data for meaningful summaries
 #[tauri::command]
-pub async fn agent_daily_summary() -> Result<Value, String> {
+pub async fn agent_daily_summary(request: DailySummaryRequest) -> Result<Value, String> {
     let client = create_http_client()?;
     let url = format!("{}/daily-summary", AGENT_BASE_URL);
 
     let response = client
-        .get(&url)
+        .post(&url)
+        .json(&request)
         .send()
         .await
         .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;
@@ -445,6 +480,143 @@ pub async fn agent_health() -> Result<bool, String> {
         Ok(response) => Ok(response.status().is_success()),
         Err(_) => Ok(false), // Agent not available, return false instead of error
     }
+}
+
+/// Sync tickets to ChromaDB for semantic search
+#[tauri::command]
+pub async fn agent_sync_tickets(request: SyncTicketsRequest) -> Result<Value, String> {
+    let client = create_http_client()?;
+    let url = format!("{}/sync-tickets", AGENT_BASE_URL);
+
+    let response = client
+        .post(&url)
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AppError::Agent(format!(
+            "Agent returned error {}: {}",
+            status, error_text
+        ))
+        .into());
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to parse agent response: {}", e)))?;
+
+    Ok(result)
+}
+
+/// Get ChromaDB sync status
+#[tauri::command]
+pub async fn agent_sync_status() -> Result<Value, String> {
+    let client = create_http_client()?;
+    let url = format!("{}/context/sync-status", AGENT_BASE_URL);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AppError::Agent(format!(
+            "Agent returned error {}: {}",
+            status, error_text
+        ))
+        .into());
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to parse agent response: {}", e)))?;
+
+    Ok(result)
+}
+
+/// Invalidate context cache
+#[tauri::command]
+pub async fn agent_invalidate_cache(board_id: Option<String>) -> Result<Value, String> {
+    let client = create_http_client()?;
+    let mut url = format!("{}/context/invalidate-cache", AGENT_BASE_URL);
+
+    if let Some(ref id) = board_id {
+        url = format!("{}?board_id={}", url, id);
+    }
+
+    let response = client
+        .post(&url)
+        .send()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AppError::Agent(format!(
+            "Agent returned error {}: {}",
+            status, error_text
+        ))
+        .into());
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to parse agent response: {}", e)))?;
+
+    Ok(result)
+}
+
+/// Get cache statistics
+#[tauri::command]
+pub async fn agent_cache_stats() -> Result<Value, String> {
+    let client = create_http_client()?;
+    let url = format!("{}/context/cache-stats", AGENT_BASE_URL);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AppError::Agent(format!(
+            "Agent returned error {}: {}",
+            status, error_text
+        ))
+        .into());
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to parse agent response: {}", e)))?;
+
+    Ok(result)
 }
 
 // ===========================================

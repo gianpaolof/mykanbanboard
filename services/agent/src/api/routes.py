@@ -1,11 +1,19 @@
-"""FastAPI routes for Kanban AI agent."""
+"""FastAPI routes for Kanban AI agent.
 
-from typing import Any
+Integrates the Context Management System for:
+- Rich, layered context (Global, Relevant, Operation)
+- ChromaDB semantic search for similar tickets
+- Token budget management
+- Caching for expensive operations
+"""
+
+from typing import Any, Optional
 import logging
 import asyncio
 from functools import wraps
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from ..agent.modules import (
     TriageModule,
@@ -19,6 +27,7 @@ from ..agent.multihop import MultiHopTicketAnalyzer
 from ..agent.analytics import analytics
 from ..agent.suggester import suggester
 from ..db.chroma import ChromaManager
+from ..context import ContextManager, get_context_manager
 from .models import (
     TriageRequest,
     TriageResponse,
@@ -42,6 +51,52 @@ from .models import (
     SuggestionsResponse,
     Suggestion,
 )
+
+
+# ============================================================================
+# EXTENDED REQUEST MODELS (with context support)
+# ============================================================================
+
+
+class TicketData(BaseModel):
+    """Ticket data for context."""
+    id: str
+    title: str
+    description: str = ""
+    status: str = ""
+    priority: str = "medium"
+    labels: list[str] = Field(default_factory=list)
+    due_date: Optional[str] = None
+    column_id: str = ""
+
+
+class BoardContext(BaseModel):
+    """Board context data."""
+    board_id: str = "default"
+    board_name: str = "Kanban Board"
+    columns: list[dict[str, Any]] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
+    total_tickets: int = 0
+
+
+class DailySummaryRequest(BaseModel):
+    """Request model for daily summary WITH actual ticket data."""
+    in_progress: list[TicketData] = Field(default_factory=list)
+    blocked: list[TicketData] = Field(default_factory=list)
+    due_soon: list[TicketData] = Field(default_factory=list)
+    recently_completed: list[TicketData] = Field(default_factory=list)
+    board_context: Optional[BoardContext] = None
+
+
+class AnalyzeRequestWithContext(AnalyzeRequest):
+    """Extended analyze request with board context."""
+    board_context: Optional[BoardContext] = None
+
+
+class SyncTicketsRequest(BaseModel):
+    """Request model for syncing tickets to ChromaDB."""
+    tickets: list[TicketData]
+    force_full_sync: bool = False
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -125,6 +180,13 @@ def extract_value(obj: Any) -> Any:
 def get_chroma_manager() -> ChromaManager:
     """Get ChromaDB manager instance."""
     return ChromaManager()
+
+
+def get_ctx_manager(
+    chroma: ChromaManager = Depends(get_chroma_manager),
+) -> ContextManager:
+    """Get ContextManager instance with ChromaDB."""
+    return get_context_manager(chroma)
 
 
 # ============================================================================
@@ -421,46 +483,97 @@ async def search_tickets(
 
 
 # ============================================================================
-# DAILY SUMMARY ENDPOINT
+# DAILY SUMMARY ENDPOINT (FIXED - now receives actual ticket data)
 # ============================================================================
 
 
-@router.get(
+@router.post(
     "/daily-summary",
     response_model=DailySummaryResponse,
-    summary="Get daily summary",
-    description="Generate a personalized daily work summary",
+    summary="Get daily summary with actual ticket data",
+    description="Generate a personalized daily summary using REAL ticket data",
 )
-async def get_daily_summary() -> DailySummaryResponse:
-    """Get daily summary.
+async def get_daily_summary(
+    request: DailySummaryRequest,
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> DailySummaryResponse:
+    """Generate daily summary using ACTUAL ticket data.
 
-    This is a placeholder that will be enhanced with actual ticket data
-    from the frontend via the context parameter.
+    IMPORTANT: This endpoint now receives real ticket data from the frontend,
+    fixing the previous issue where empty lists were passed.
+
+    The frontend should:
+    1. Query tickets by status (in_progress, blocked, etc.)
+    2. Send them in the request body
+    3. Receive a meaningful summary
+
+    Args:
+        request: Daily summary request with categorized tickets
 
     Returns:
-        Daily summary with focus areas
+        Daily summary with focus areas, blockers, and quick wins
 
     Raises:
         HTTPException: If summary generation fails
     """
     try:
-        logger.info("Generating daily summary")
+        logger.info("Generating daily summary with real ticket data")
 
-        # Placeholder data - will be replaced with real ticket data
+        # Convert Pydantic models to dicts
+        in_progress = [t.model_dump() for t in request.in_progress]
+        blocked = [t.model_dump() for t in request.blocked]
+        due_soon = [t.model_dump() for t in request.due_soon]
+        recently_completed = [t.model_dump() for t in request.recently_completed]
+
+        # Log what we received (for debugging)
+        logger.debug(
+            f"Received: {len(in_progress)} in_progress, "
+            f"{len(blocked)} blocked, {len(due_soon)} due_soon, "
+            f"{len(recently_completed)} recently_completed"
+        )
+
+        # Build context (optional board data)
+        board_data = None
+        if request.board_context:
+            board_data = request.board_context.model_dump()
+
+        # Get context from manager (adds time context, etc.)
+        context = ctx_manager.get_daily_summary_context(
+            in_progress=in_progress,
+            blocked=blocked,
+            due_soon=due_soon,
+            recently_completed=recently_completed,
+            board_data=board_data,
+        )
+
+        # Format tickets for DSPy module
+        def format_ticket(t: dict) -> dict:
+            """Format ticket for summary module."""
+            return {
+                "id": t.get("id", "")[:8],
+                "title": t.get("title", "Untitled"),
+                "priority": t.get("priority", "medium"),
+                "due_date": t.get("due_date"),
+            }
+
+        formatted_in_progress = [format_ticket(t) for t in in_progress]
+        formatted_blocked = [format_ticket(t) for t in blocked]
+        formatted_due_soon = [format_ticket(t) for t in due_soon]
+        formatted_completed = [format_ticket(t) for t in recently_completed]
+
         summary_module = DailySummaryModule()
 
-        # Run DSPy module with timeout
         def run_summary():
             return summary_module(
-                in_progress=[],
-                blocked=[],
-                due_soon=[],
-                recently_completed=[],
+                in_progress=formatted_in_progress,
+                blocked=formatted_blocked,
+                due_soon=formatted_due_soon,
+                recently_completed=formatted_completed,
             )
 
         result = await run_sync_with_timeout(run_summary, DAILY_SUMMARY_TIMEOUT, "Daily summary")
 
-        # Extract values from DSPy prediction
+        # Extract values
         greeting = extract_value(result.greeting)
         focus_today = extract_value(result.focus_today)
         blockers = extract_value(result.blockers)
@@ -631,7 +744,7 @@ async def judge_ticket(request: JudgeRequest) -> JudgeResponse:
 
 
 # ============================================================================
-# ANALYZE ENDPOINT
+# ANALYZE ENDPOINT (FIXED - now uses ChromaDB for similar tickets)
 # ============================================================================
 
 ANALYZE_TIMEOUT = 60
@@ -640,11 +753,22 @@ ANALYZE_TIMEOUT = 60
 @router.post(
     "/agent/analyze",
     response_model=AnalyzeResponse,
-    summary="Multi-hop ticket analysis",
-    description="Analyze a ticket using multi-hop reasoning for deep insights",
+    summary="Multi-hop ticket analysis with real context",
+    description="Analyze a ticket using multi-hop reasoning with REAL similar tickets from ChromaDB",
 )
-async def analyze_ticket(request: AnalyzeRequest) -> AnalyzeResponse:
-    """Analyze a ticket using multi-hop reasoning.
+async def analyze_ticket(
+    request: AnalyzeRequestWithContext,
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> AnalyzeResponse:
+    """Analyze a ticket using multi-hop reasoning with REAL similar tickets.
+
+    IMPORTANT: This endpoint now retrieves actual similar tickets from ChromaDB,
+    fixing the previous hardcoded `similar_tickets="[]"` issue.
+
+    The context manager:
+    1. Searches ChromaDB for semantically similar tickets
+    2. Retrieves their metadata (status, priority, labels)
+    3. Provides rich context for multi-hop analysis
 
     Args:
         request: Analyze request with ticket details
@@ -658,6 +782,23 @@ async def analyze_ticket(request: AnalyzeRequest) -> AnalyzeResponse:
     try:
         logger.info(f"Analyzing ticket: {request.title[:50]}...")
 
+        ticket = {
+            "title": request.title,
+            "description": request.description,
+        }
+
+        board_data = None
+        if request.board_context:
+            board_data = request.board_context.model_dump()
+
+        # Get context with REAL similar tickets from ChromaDB
+        context = ctx_manager.get_analyze_context(ticket, board_data)
+
+        # Get similar tickets as JSON for the multi-hop analyzer
+        similar_tickets_json = context.get_similar_tickets_json()
+
+        logger.debug(f"Found similar tickets: {similar_tickets_json[:200]}...")
+
         analyzer = MultiHopTicketAnalyzer()
 
         # Run multi-hop analysis with extended timeout
@@ -665,7 +806,7 @@ async def analyze_ticket(request: AnalyzeRequest) -> AnalyzeResponse:
             return analyzer(
                 ticket_title=request.title,
                 ticket_description=request.description,
-                similar_tickets="[]"  # TODO: Integrate with ChromaDB for similar tickets
+                similar_tickets=similar_tickets_json,  # NOW REAL DATA from ChromaDB!
             )
 
         result = await run_sync_with_timeout(run_analyze, ANALYZE_TIMEOUT, "Analyze")
@@ -879,3 +1020,111 @@ async def get_suggestions(
             status_code=500,
             detail=f"Suggestions failed: {str(e)}",
         )
+
+
+# ============================================================================
+# SYNC ENDPOINT (for ChromaDB sync)
+# ============================================================================
+
+
+@router.post(
+    "/sync-tickets",
+    summary="Sync tickets to ChromaDB",
+    description="Sync ticket data from frontend/SQLite to ChromaDB for semantic search",
+)
+async def sync_tickets(
+    request: SyncTicketsRequest,
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> dict[str, Any]:
+    """Sync tickets to ChromaDB.
+
+    This endpoint should be called:
+    - On app startup (with all tickets)
+    - When tickets are created/updated/deleted
+    - Periodically as a background sync
+
+    Args:
+        request: Tickets to sync
+
+    Returns:
+        Sync status
+    """
+    try:
+        tickets = [t.model_dump() for t in request.tickets]
+        status = await ctx_manager.sync_tickets_to_chroma(
+            tickets=tickets,
+            force_full_sync=request.force_full_sync,
+        )
+
+        return {
+            "success": status.is_synced,
+            "synced_count": status.tickets_in_chroma,
+            "total_count": status.tickets_in_sqlite,
+            "last_sync": status.last_sync_at,
+        }
+
+    except Exception as e:
+        logger.error(f"Sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+# ============================================================================
+# CACHE MANAGEMENT ENDPOINTS
+# ============================================================================
+
+
+@router.post(
+    "/context/invalidate-cache",
+    summary="Invalidate context cache",
+)
+async def invalidate_cache(
+    board_id: Optional[str] = Query(None, description="Board ID to invalidate"),
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> dict[str, Any]:
+    """Invalidate context cache.
+
+    Use this when:
+    - Board structure changes (columns, labels)
+    - Many tickets are updated at once
+    - You need fresh context
+
+    Args:
+        board_id: Optional board ID to invalidate (all if not specified)
+
+    Returns:
+        Cache invalidation stats
+    """
+    if board_id:
+        count = ctx_manager.invalidate_board_cache(board_id)
+        return {"invalidated": count, "board_id": board_id}
+    else:
+        ctx_manager.clear_all_cache()
+        return {"invalidated": "all"}
+
+
+@router.get(
+    "/context/cache-stats",
+    summary="Get cache statistics",
+)
+async def get_cache_stats(
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> dict[str, Any]:
+    """Get cache statistics."""
+    return ctx_manager.get_cache_stats()
+
+
+@router.get(
+    "/context/sync-status",
+    summary="Get ChromaDB sync status",
+)
+async def get_sync_status(
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> dict[str, Any]:
+    """Get ChromaDB sync status."""
+    status = ctx_manager.get_sync_status()
+    return {
+        "is_synced": status.is_synced,
+        "last_sync_at": status.last_sync_at,
+        "tickets_in_chroma": status.tickets_in_chroma,
+        "tickets_in_sqlite": status.tickets_in_sqlite,
+    }
