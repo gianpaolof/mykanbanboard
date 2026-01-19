@@ -210,18 +210,57 @@ pub fn stop_agent(app: &AppHandle) {
 // REQUEST/RESPONSE TYPES
 // ===========================================
 
+/// Project context for AI operations (matches Python API)
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentProjectContext {
+    #[serde(default)]
+    pub tech_stack: Vec<String>,
+    pub conventions: Option<String>,
+    pub priority_rules: Option<Value>,
+    pub architecture: Option<String>,
+}
+
+/// Board context for AI operations
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentBoardContext {
+    pub board_id: String,
+    pub board_name: String,
+    #[serde(default)]
+    pub columns: Vec<Value>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub total_tickets: i32,
+}
+
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TriageRequest {
     ticket_id: String,
     title: String,
     description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    existing_labels: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    project_context: Option<AgentProjectContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    board_context: Option<AgentBoardContext>,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DecomposeRequest {
     ticket_id: String,
     title: String,
     description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    context: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    project_context: Option<AgentProjectContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    board_context: Option<AgentBoardContext>,
 }
 
 #[derive(Debug, Serialize)]
@@ -271,16 +310,38 @@ pub struct SyncTicketsRequest {
     pub force_full_sync: bool,
 }
 
+/// Request for indexing a single ticket
+#[derive(Debug, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexTicketRequest {
+    pub ticket_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub priority: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub column_id: String,
+}
+
 // ===========================================
 // AGENT COMMANDS
 // ===========================================
 
 /// Triage a ticket: auto-assign priority, labels, and effort estimate
+/// Now accepts optional project_context and board_context for context-aware triage
 #[tauri::command]
 pub async fn agent_triage(
     ticket_id: String,
     title: String,
     description: String,
+    existing_labels: Option<Vec<String>>,
+    project_context: Option<AgentProjectContext>,
+    board_context: Option<AgentBoardContext>,
 ) -> Result<Value, String> {
     let client = create_http_client()?;
     let url = format!("{}/triage", AGENT_BASE_URL);
@@ -289,6 +350,9 @@ pub async fn agent_triage(
         ticket_id,
         title,
         description,
+        existing_labels,
+        project_context,
+        board_context,
     };
 
     let response = client
@@ -320,11 +384,15 @@ pub async fn agent_triage(
 }
 
 /// Decompose a complex task into subtasks
+/// Now accepts optional project_context and board_context for context-aware decomposition
 #[tauri::command]
 pub async fn agent_decompose(
     ticket_id: String,
     title: String,
     description: String,
+    context: Option<String>,
+    project_context: Option<AgentProjectContext>,
+    board_context: Option<AgentBoardContext>,
 ) -> Result<Value, String> {
     let client = create_http_client()?;
     let url = format!("{}/decompose", AGENT_BASE_URL);
@@ -333,6 +401,9 @@ pub async fn agent_decompose(
         ticket_id,
         title,
         description,
+        context,
+        project_context,
+        board_context,
     };
 
     let response = client
@@ -594,6 +665,73 @@ pub async fn agent_cache_stats() -> Result<Value, String> {
 
     let response = client
         .get(&url)
+        .send()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AppError::Agent(format!(
+            "Agent returned error {}: {}",
+            status, error_text
+        ))
+        .into());
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to parse agent response: {}", e)))?;
+
+    Ok(result)
+}
+
+/// Index a single ticket to ChromaDB for semantic search
+#[tauri::command]
+pub async fn agent_index_ticket(request: IndexTicketRequest) -> Result<Value, String> {
+    let client = create_http_client()?;
+    let url = format!("{}/index-ticket", AGENT_BASE_URL);
+
+    let response = client
+        .post(&url)
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AppError::Agent(format!(
+            "Agent returned error {}: {}",
+            status, error_text
+        ))
+        .into());
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Http(format!("Failed to parse agent response: {}", e)))?;
+
+    Ok(result)
+}
+
+/// Remove a ticket from ChromaDB index
+#[tauri::command]
+pub async fn agent_remove_from_index(ticket_id: String) -> Result<Value, String> {
+    let client = create_http_client()?;
+    let url = format!("{}/index-ticket/{}", AGENT_BASE_URL, ticket_id);
+
+    let response = client
+        .delete(&url)
         .send()
         .await
         .map_err(|e| AppError::Http(format!("Failed to connect to agent: {}", e)))?;

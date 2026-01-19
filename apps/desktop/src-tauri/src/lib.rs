@@ -60,6 +60,11 @@ pub fn run() {
             commands::create_board,
             commands::update_board,
             commands::delete_board,
+            // Project context commands
+            commands::get_project_context,
+            commands::update_project_context,
+            commands::set_project_context,
+            commands::delete_project_context,
             // Column commands
             commands::get_columns,
             commands::create_column,
@@ -107,6 +112,8 @@ pub fn run() {
             agent::agent_sync_status,
             agent::agent_invalidate_cache,
             agent::agent_cache_stats,
+            agent::agent_index_ticket,
+            agent::agent_remove_from_index,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

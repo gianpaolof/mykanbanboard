@@ -116,6 +116,28 @@ export interface SubtaskUpdate {
 }
 
 // ===========================================
+// PROJECT CONTEXT (for AI operations)
+// ===========================================
+
+export interface ProjectContext {
+  techStack: string[];
+  conventions?: string;
+  priorityRules?: Record<string, unknown>;
+  architecture?: string;
+  description?: string;
+  defaultLabels: string[];
+}
+
+export interface ProjectContextUpdate {
+  techStack?: string[];
+  conventions?: string;
+  priorityRules?: Record<string, unknown>;
+  architecture?: string;
+  description?: string;
+  defaultLabels?: string[];
+}
+
+// ===========================================
 // BOARD
 // ===========================================
 
@@ -123,6 +145,7 @@ export interface Board {
   id: string;
   name: string;
   description?: string;
+  projectContext?: ProjectContext;
   columns: Column[];
   createdAt: string;
   updatedAt: string;

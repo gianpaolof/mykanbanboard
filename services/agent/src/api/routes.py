@@ -22,8 +22,12 @@ from ..agent.modules import (
     ActionDeciderModule,
     RuleParserModule,
 )
+from ..agent.context_modules import (
+    ContextAwareTriageModule,
+    ContextAwareDecomposeModule,
+    DynamicMultiHopAnalyzer,
+)
 from ..agent.judge import TicketQualityJudge
-from ..agent.multihop import MultiHopTicketAnalyzer
 from ..agent.analytics import analytics
 from ..agent.suggester import suggester
 from ..db.chroma import ChromaManager
@@ -77,6 +81,26 @@ class BoardContext(BaseModel):
     columns: list[dict[str, Any]] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     total_tickets: int = 0
+
+
+class ProjectContext(BaseModel):
+    """Project context for AI operations."""
+    tech_stack: list[str] = Field(default_factory=list)
+    conventions: Optional[str] = None
+    priority_rules: Optional[dict[str, Any]] = None
+    architecture: Optional[str] = None
+
+
+class TriageRequestWithContext(TriageRequest):
+    """Extended triage request with project context."""
+    board_context: Optional[BoardContext] = None
+    project_context: Optional[ProjectContext] = None
+
+
+class DecomposeRequestWithContext(DecomposeRequest):
+    """Extended decompose request with project context."""
+    board_context: Optional[BoardContext] = None
+    project_context: Optional[ProjectContext] = None
 
 
 class DailySummaryRequest(BaseModel):
@@ -212,14 +236,23 @@ async def health_check() -> dict[str, str]:
 @router.post(
     "/triage",
     response_model=TriageResponse,
-    summary="Auto-triage a ticket",
-    description="Automatically assign priority, labels, and effort estimate to a ticket",
+    summary="Auto-triage a ticket with context",
+    description="Automatically assign priority, labels, and effort estimate using project context and similar tickets",
 )
-async def triage_ticket(request: TriageRequest) -> TriageResponse:
-    """Auto-triage a ticket.
+async def triage_ticket(
+    request: TriageRequestWithContext,
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> TriageResponse:
+    """Auto-triage a ticket with full context awareness.
+
+    This endpoint uses:
+    - Project context (tech stack, conventions, priority rules)
+    - Similar tickets from ChromaDB for consistency
+    - Existing labels for label selection
 
     Args:
-        request: Triage request with ticket details
+        request: Triage request with ticket details and optional context
+        ctx_manager: Context manager for retrieval
 
     Returns:
         Triage response with metadata
@@ -230,15 +263,41 @@ async def triage_ticket(request: TriageRequest) -> TriageResponse:
     try:
         logger.info(f"Triaging ticket: {request.ticket_id}")
 
-        triage_module = TriageModule()
+        # Check if we have context - use context-aware module
+        has_context = request.project_context or request.board_context
 
-        # Run DSPy module with timeout
-        def run_triage():
-            return triage_module(
-                title=request.title,
-                description=request.description,
-                existing_labels=request.existing_labels,
-            )
+        if has_context:
+            # Use context-aware triage module
+            triage_module = ContextAwareTriageModule(ctx_manager)
+
+            # Prepare project context dict
+            project_ctx = None
+            if request.project_context:
+                project_ctx = {
+                    "tech_stack": request.project_context.tech_stack,
+                    "conventions": request.project_context.conventions,
+                    "priority_rules": request.project_context.priority_rules,
+                    "architecture": request.project_context.architecture,
+                }
+
+            def run_triage():
+                return triage_module(
+                    ticket_id=request.ticket_id,
+                    title=request.title,
+                    description=request.description,
+                    project_context=project_ctx,
+                    existing_labels=request.existing_labels,
+                )
+        else:
+            # Fallback to basic triage module
+            basic_triage = TriageModule()
+
+            def run_triage():
+                return basic_triage(
+                    title=request.title,
+                    description=request.description,
+                    existing_labels=request.existing_labels,
+                )
 
         result = await run_sync_with_timeout(run_triage, TRIAGE_TIMEOUT, "Triage")
 
@@ -275,14 +334,23 @@ async def triage_ticket(request: TriageRequest) -> TriageResponse:
 @router.post(
     "/decompose",
     response_model=DecomposeResponse,
-    summary="Decompose a task",
-    description="Break down a complex task into actionable subtasks",
+    summary="Decompose a task with context",
+    description="Break down a complex task into actionable subtasks using project context and patterns",
 )
-async def decompose_task(request: DecomposeRequest) -> DecomposeResponse:
-    """Decompose a task into subtasks.
+async def decompose_task(
+    request: DecomposeRequestWithContext,
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> DecomposeResponse:
+    """Decompose a task into subtasks with context awareness.
+
+    This endpoint uses:
+    - Project context (tech stack, architecture patterns)
+    - Similar tasks from ChromaDB for decomposition patterns
+    - Board workflow stages for subtask assignment
 
     Args:
-        request: Decomposition request
+        request: Decomposition request with optional context
+        ctx_manager: Context manager for retrieval
 
     Returns:
         Decomposition response with subtasks
@@ -293,15 +361,45 @@ async def decompose_task(request: DecomposeRequest) -> DecomposeResponse:
     try:
         logger.info(f"Decomposing task: {request.ticket_id}")
 
-        decompose_module = DecomposeModule()
+        # Check if we have context
+        has_context = request.project_context or request.board_context
 
-        # Run DSPy module with timeout
-        def run_decompose():
-            return decompose_module(
-                title=request.title,
-                description=request.description,
-                context=request.context or "",
-            )
+        if has_context:
+            # Use context-aware decompose module
+            decompose_module = ContextAwareDecomposeModule(ctx_manager)
+
+            # Prepare project context dict
+            project_ctx = None
+            if request.project_context:
+                project_ctx = {
+                    "tech_stack": request.project_context.tech_stack,
+                    "conventions": request.project_context.conventions,
+                    "architecture": request.project_context.architecture,
+                }
+
+            # Prepare board data
+            board_data = None
+            if request.board_context:
+                board_data = request.board_context.model_dump()
+
+            def run_decompose():
+                return decompose_module(
+                    ticket_id=request.ticket_id,
+                    title=request.title,
+                    description=request.description,
+                    project_context=project_ctx,
+                    board_data=board_data,
+                )
+        else:
+            # Fallback to basic decompose module
+            basic_decompose = DecomposeModule()
+
+            def run_decompose():
+                return basic_decompose(
+                    title=request.title,
+                    description=request.description,
+                    context=request.context or "",
+                )
 
         result = await run_sync_with_timeout(run_decompose, DECOMPOSE_TIMEOUT, "Decompose")
 
@@ -753,25 +851,24 @@ ANALYZE_TIMEOUT = 60
 @router.post(
     "/agent/analyze",
     response_model=AnalyzeResponse,
-    summary="Multi-hop ticket analysis with real context",
-    description="Analyze a ticket using multi-hop reasoning with REAL similar tickets from ChromaDB",
+    summary="Dynamic multi-hop ticket analysis",
+    description="Analyze a ticket using dynamic multi-hop reasoning with retrieval at each hop",
 )
 async def analyze_ticket(
     request: AnalyzeRequestWithContext,
     ctx_manager: ContextManager = Depends(get_ctx_manager),
 ) -> AnalyzeResponse:
-    """Analyze a ticket using multi-hop reasoning with REAL similar tickets.
+    """Analyze a ticket using dynamic multi-hop reasoning.
 
-    IMPORTANT: This endpoint now retrieves actual similar tickets from ChromaDB,
-    fixing the previous hardcoded `similar_tickets="[]"` issue.
-
-    The context manager:
-    1. Searches ChromaDB for semantically similar tickets
-    2. Retrieves their metadata (status, priority, labels)
-    3. Provides rich context for multi-hop analysis
+    This endpoint uses DynamicMultiHopAnalyzer which:
+    1. HOP 1: Initial analysis + generates follow-up queries
+    2. RETRIEVAL: Executes follow-up queries against ChromaDB
+    3. HOP 2: Deep analysis with additional context
+    4. HOP 3: Actionable insights and recommendations
 
     Args:
         request: Analyze request with ticket details
+        ctx_manager: Context manager for retrieval
 
     Returns:
         Analysis with context, patterns, insights, recommendations
@@ -791,7 +888,7 @@ async def analyze_ticket(
         if request.board_context:
             board_data = request.board_context.model_dump()
 
-        # Get context with REAL similar tickets from ChromaDB
+        # Get context with similar tickets from ChromaDB
         context = ctx_manager.get_analyze_context(ticket, board_data)
 
         # Get similar tickets as JSON for the multi-hop analyzer
@@ -799,26 +896,31 @@ async def analyze_ticket(
 
         logger.debug(f"Found similar tickets: {similar_tickets_json[:200]}...")
 
-        analyzer = MultiHopTicketAnalyzer()
+        # Use DynamicMultiHopAnalyzer for dynamic retrieval at each hop
+        analyzer = DynamicMultiHopAnalyzer(ctx_manager)
 
         # Run multi-hop analysis with extended timeout
         def run_analyze():
             return analyzer(
                 ticket_title=request.title,
                 ticket_description=request.description,
-                similar_tickets=similar_tickets_json,  # NOW REAL DATA from ChromaDB!
+                similar_tickets=similar_tickets_json,
             )
 
         result = await run_sync_with_timeout(run_analyze, ANALYZE_TIMEOUT, "Analyze")
 
-        # Extract values
+        # Extract values - DynamicMultiHopAnalyzer returns a dict directly
+        recommendations = result.get("recommendations", [])
+        if isinstance(recommendations, list):
+            recommendations = "; ".join(recommendations) if recommendations else ""
+
         return AnalyzeResponse(
             context_summary=extract_value(result.get("context_summary", "")),
             key_themes=extract_value(result.get("key_themes", [])),
             patterns=extract_value(result.get("patterns", [])),
             dependencies=extract_value(result.get("dependencies", "")),
             insights=extract_value(result.get("insights", "")),
-            recommendations=extract_value(result.get("recommendations", "")),
+            recommendations=recommendations,
             complexity=extract_value(result.get("complexity", "medium"))
         )
 
@@ -1128,3 +1230,92 @@ async def get_sync_status(
         "tickets_in_chroma": status.tickets_in_chroma,
         "tickets_in_sqlite": status.tickets_in_sqlite,
     }
+
+
+class IndexTicketRequest(BaseModel):
+    """Request model for indexing a single ticket."""
+    ticket_id: str
+    title: str
+    description: str = ""
+    status: str = ""
+    priority: str = "medium"
+    labels: list[str] = Field(default_factory=list)
+    column_id: str = ""
+
+
+@router.post(
+    "/index-ticket",
+    summary="Index a single ticket",
+    description="Add or update a single ticket in ChromaDB for semantic search",
+)
+async def index_ticket(
+    request: IndexTicketRequest,
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> dict[str, Any]:
+    """Index a single ticket to ChromaDB.
+
+    Use this endpoint for incremental updates when:
+    - A ticket is created
+    - A ticket is updated
+
+    Args:
+        request: Ticket data to index
+
+    Returns:
+        Success status
+    """
+    try:
+        ticket = {
+            "id": request.ticket_id,
+            "title": request.title,
+            "description": request.description,
+            "status": request.status,
+            "priority": request.priority,
+            "labels": request.labels,
+            "column_id": request.column_id,
+        }
+        success = await ctx_manager.sync_single_ticket(ticket, action="upsert")
+
+        return {
+            "success": success,
+            "ticket_id": request.ticket_id,
+            "action": "indexed",
+        }
+
+    except Exception as e:
+        logger.error(f"Index ticket failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Index ticket failed: {str(e)}")
+
+
+@router.delete(
+    "/index-ticket/{ticket_id}",
+    summary="Remove a ticket from index",
+    description="Remove a ticket from ChromaDB index",
+)
+async def remove_ticket_from_index(
+    ticket_id: str,
+    ctx_manager: ContextManager = Depends(get_ctx_manager),
+) -> dict[str, Any]:
+    """Remove a ticket from ChromaDB.
+
+    Use this endpoint when a ticket is deleted.
+
+    Args:
+        ticket_id: ID of ticket to remove
+
+    Returns:
+        Success status
+    """
+    try:
+        ticket = {"id": ticket_id}
+        success = await ctx_manager.sync_single_ticket(ticket, action="delete")
+
+        return {
+            "success": success,
+            "ticket_id": ticket_id,
+            "action": "removed",
+        }
+
+    except Exception as e:
+        logger.error(f"Remove ticket from index failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Remove ticket failed: {str(e)}")

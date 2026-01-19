@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { api, subtaskApi } from '@/lib/tauri';
 import { SubtaskList } from './SubtaskList';
 import { TicketQualityBadge, TicketAnalysisPanel } from '@/components/ai';
+import { useBoardStore } from '@/stores/boardStore';
+import { useProjectStore } from '@/stores/projectStore';
 import type { Ticket, Effort, Priority, Subtask } from '@/types';
 import type { AgentTriageResult } from '@/lib/tauri';
 
@@ -48,6 +50,15 @@ export const TicketModal = memo(function TicketModal({
   onSave,
   onDelete,
 }: TicketModalProps) {
+  // Get project context for AI operations
+  const currentBoardId = useBoardStore((state) => state.currentBoardId);
+  const board = useBoardStore((state) => state.board);
+  const columns = useBoardStore((state) => state.columns);
+  const labels = useBoardStore((state) => state.labels);
+  const tickets = useBoardStore((state) => state.tickets);
+  const getAgentProjectContext = useProjectStore((state) => state.getAgentProjectContext);
+  const getAgentBoardContext = useProjectStore((state) => state.getAgentBoardContext);
+
   // Form state
   const [description, setDescription] = useState(ticket.description || '');
   const [priority, setPriority] = useState<Priority | undefined>(ticket.priority);
@@ -89,10 +100,26 @@ export const TicketModal = memo(function TicketModal({
     setTriageResult(null);
 
     try {
+      // Get contexts for AI
+      const projectContext = getAgentProjectContext();
+      const totalTickets = Object.values(tickets).flat().length;
+      const boardContext = currentBoardId && board
+        ? getAgentBoardContext(
+            currentBoardId,
+            board.name,
+            columns.map((c) => ({ id: c.id, name: c.name })),
+            labels.map((l) => l.name),
+            totalTickets
+          )
+        : undefined;
+
       const result = await api.agent.triage(
         ticket.id,
         ticket.title,
-        description || ticket.description || ''
+        description || ticket.description || '',
+        labels.map((l) => l.name), // existing labels for the board
+        projectContext,
+        boardContext
       );
       setTriageResult(result);
     } catch (error) {
@@ -101,7 +128,7 @@ export const TicketModal = memo(function TicketModal({
     } finally {
       setIsTriaging(false);
     }
-  }, [ticket.id, ticket.title, ticket.description, description]);
+  }, [ticket.id, ticket.title, ticket.description, description, getAgentProjectContext, getAgentBoardContext, currentBoardId, board, columns, labels, tickets]);
 
   // Apply AI suggestions to form
   const applyTriageSuggestions = useCallback(() => {
@@ -131,10 +158,26 @@ export const TicketModal = memo(function TicketModal({
     setDecomposeResult(null);
 
     try {
+      // Get contexts for AI
+      const projectContext = getAgentProjectContext();
+      const totalTickets = Object.values(tickets).flat().length;
+      const boardContext = currentBoardId && board
+        ? getAgentBoardContext(
+            currentBoardId,
+            board.name,
+            columns.map((c) => ({ id: c.id, name: c.name })),
+            labels.map((l) => l.name),
+            totalTickets
+          )
+        : undefined;
+
       const result = await api.agent.decompose(
         ticket.id,
         ticket.title,
-        ticket.description || ''
+        ticket.description || '',
+        undefined, // context string (optional legacy param)
+        projectContext,
+        boardContext
       );
 
       // Convert to subtask suggestions with selection state
@@ -150,7 +193,7 @@ export const TicketModal = memo(function TicketModal({
     } finally {
       setIsDecomposing(false);
     }
-  }, [ticket.id, ticket.title, ticket.description]);
+  }, [ticket.id, ticket.title, ticket.description, getAgentProjectContext, getAgentBoardContext, currentBoardId, board, columns, labels, tickets]);
 
   const toggleSubtaskSelection = useCallback((index: number) => {
     setDecomposeResult((prev) => {

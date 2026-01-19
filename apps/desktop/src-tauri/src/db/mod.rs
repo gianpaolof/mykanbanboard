@@ -39,6 +39,32 @@ impl Database {
         let schema = include_str!("schema.sql");
         conn.execute_batch(schema)?;
 
+        // Run migrations for existing databases
+        self.run_v2_migrations(&conn)?;
+
+        Ok(())
+    }
+
+    /// Run migrations for existing databases (v2: add project_context)
+    fn run_v2_migrations(&self, conn: &Connection) -> AppResult<()> {
+        // Check if project_context column exists
+        let has_column: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('boards') WHERE name = 'project_context'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if !has_column {
+            // Add project_context column to boards table
+            conn.execute(
+                "ALTER TABLE boards ADD COLUMN project_context TEXT",
+                [],
+            )?;
+            println!("Migration: Added project_context column to boards table");
+        }
+
         Ok(())
     }
 

@@ -56,14 +56,22 @@ pub fn get_board(db: State<Database>, id: String) -> Result<Board, String> {
 
     let board = conn
         .query_row(
-            "SELECT id, name, created_at, updated_at FROM boards WHERE id = ?1",
+            "SELECT id, name, project_context, created_at, updated_at FROM boards WHERE id = ?1",
             [&id],
             |row| {
-                let created_at_str: String = row.get(2)?;
-                let updated_at_str: String = row.get(3)?;
+                let project_context_str: Option<String> = row.get(2)?;
+                let created_at_str: String = row.get(3)?;
+                let updated_at_str: String = row.get(4)?;
+
+                // Parse project_context JSON if present
+                let project_context = project_context_str.and_then(|json_str| {
+                    serde_json::from_str::<ProjectContext>(&json_str).ok()
+                });
+
                 Ok(Board {
                     id: row.get(0)?,
                     name: row.get(1)?,
+                    project_context,
                     created_at: DateTime::parse_from_rfc3339(&created_at_str)
                         .unwrap()
                         .with_timezone(&Utc),
@@ -90,10 +98,10 @@ pub fn create_board(db: State<Database>, board: CreateBoard) -> Result<Board, St
 
     let tx = conn.savepoint().map_err(AppError::from)?;
 
-    // Create board
+    // Create board with no project_context initially
     tx.execute(
-        "INSERT INTO boards (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
-        (&id, &board.name, &now.to_rfc3339(), &now.to_rfc3339()),
+        "INSERT INTO boards (id, name, project_context, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        (&id, &board.name, rusqlite::types::Null, &now.to_rfc3339(), &now.to_rfc3339()),
     )
     .map_err(AppError::from)?;
 
@@ -120,6 +128,7 @@ pub fn create_board(db: State<Database>, board: CreateBoard) -> Result<Board, St
     Ok(Board {
         id,
         name: board.name,
+        project_context: None,
         created_at: now,
         updated_at: now,
     })
@@ -192,6 +201,153 @@ pub fn delete_board(db: State<Database>, id: String) -> Result<(), String> {
 
     if deleted == 0 {
         return Err(AppError::NotFound(format!("Board {} not found", id)).into());
+    }
+
+    Ok(())
+}
+
+// ===========================================
+// PROJECT CONTEXT COMMANDS
+// ===========================================
+
+/// Get project context for a board
+#[tauri::command]
+pub fn get_project_context(db: State<Database>, board_id: String) -> Result<Option<ProjectContext>, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let context_json: Option<String> = conn
+        .query_row(
+            "SELECT project_context FROM boards WHERE id = ?1",
+            [&board_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .flatten();
+
+    match context_json {
+        Some(json_str) => {
+            let context: ProjectContext = serde_json::from_str(&json_str)
+                .map_err(|e| AppError::InvalidInput(format!("Invalid project context JSON: {}", e)))?;
+            Ok(Some(context))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Update project context for a board
+#[tauri::command]
+pub fn update_project_context(
+    db: State<Database>,
+    board_id: String,
+    context: UpdateProjectContext,
+) -> Result<ProjectContext, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Get current context (if any)
+    let current_json: Option<String> = conn
+        .query_row(
+            "SELECT project_context FROM boards WHERE id = ?1",
+            [&board_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(AppError::from)?
+        .flatten();
+
+    // Build new context by merging with existing
+    let mut new_context = match current_json {
+        Some(ref json_str) => {
+            serde_json::from_str::<ProjectContext>(json_str).unwrap_or_default()
+        }
+        None => ProjectContext::default(),
+    };
+
+    // Apply updates
+    if let Some(tech_stack) = context.tech_stack {
+        new_context.tech_stack = tech_stack;
+    }
+    if let Some(conventions) = context.conventions {
+        new_context.conventions = Some(conventions);
+    }
+    if let Some(priority_rules) = context.priority_rules {
+        new_context.priority_rules = Some(priority_rules);
+    }
+    if let Some(architecture) = context.architecture {
+        new_context.architecture = Some(architecture);
+    }
+    if let Some(description) = context.description {
+        new_context.description = Some(description);
+    }
+    if let Some(default_labels) = context.default_labels {
+        new_context.default_labels = default_labels;
+    }
+
+    // Serialize to JSON
+    let json_str = serde_json::to_string(&new_context)
+        .map_err(|e| AppError::InvalidInput(format!("Failed to serialize project context: {}", e)))?;
+
+    // Update database
+    let updated = conn
+        .execute(
+            "UPDATE boards SET project_context = ?1, updated_at = datetime('now') WHERE id = ?2",
+            [&json_str, &board_id],
+        )
+        .map_err(AppError::from)?;
+
+    if updated == 0 {
+        return Err(AppError::NotFound(format!("Board {} not found", board_id)).into());
+    }
+
+    Ok(new_context)
+}
+
+/// Set project context for a board (replaces entire context)
+#[tauri::command]
+pub fn set_project_context(
+    db: State<Database>,
+    board_id: String,
+    context: ProjectContext,
+) -> Result<ProjectContext, String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    // Serialize to JSON
+    let json_str = serde_json::to_string(&context)
+        .map_err(|e| AppError::InvalidInput(format!("Failed to serialize project context: {}", e)))?;
+
+    // Update database
+    let updated = conn
+        .execute(
+            "UPDATE boards SET project_context = ?1, updated_at = datetime('now') WHERE id = ?2",
+            [&json_str, &board_id],
+        )
+        .map_err(AppError::from)?;
+
+    if updated == 0 {
+        return Err(AppError::NotFound(format!("Board {} not found", board_id)).into());
+    }
+
+    Ok(context)
+}
+
+/// Delete project context for a board
+#[tauri::command]
+pub fn delete_project_context(db: State<Database>, board_id: String) -> Result<(), String> {
+    let conn = db.connection();
+    let conn = conn.lock().unwrap();
+
+    let updated = conn
+        .execute(
+            "UPDATE boards SET project_context = NULL, updated_at = datetime('now') WHERE id = ?1",
+            [&board_id],
+        )
+        .map_err(AppError::from)?;
+
+    if updated == 0 {
+        return Err(AppError::NotFound(format!("Board {} not found", board_id)).into());
     }
 
     Ok(())

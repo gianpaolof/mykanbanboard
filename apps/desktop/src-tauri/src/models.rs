@@ -69,6 +69,43 @@ impl Effort {
 }
 
 // ===========================================
+// PROJECT CONTEXT (for AI operations)
+// ===========================================
+
+/// Project context for AI operations
+/// Stored as JSON in boards.project_context
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectContext {
+    /// Tech stack (e.g., ["React", "FastAPI", "PostgreSQL"])
+    #[serde(default)]
+    pub tech_stack: Vec<String>,
+    /// Project conventions (e.g., "Use kebab-case for files, PascalCase for components")
+    pub conventions: Option<String>,
+    /// Priority rules as JSON (e.g., {"nfc": "high", "security": "critical"})
+    pub priority_rules: Option<serde_json::Value>,
+    /// Architecture description (e.g., "Monorepo with React frontend and FastAPI backend")
+    pub architecture: Option<String>,
+    /// Project description
+    pub description: Option<String>,
+    /// Default labels for triage
+    #[serde(default)]
+    pub default_labels: Vec<String>,
+}
+
+/// DTO for updating project context
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProjectContext {
+    pub tech_stack: Option<Vec<String>>,
+    pub conventions: Option<String>,
+    pub priority_rules: Option<serde_json::Value>,
+    pub architecture: Option<String>,
+    pub description: Option<String>,
+    pub default_labels: Option<Vec<String>>,
+}
+
+// ===========================================
 // CORE MODELS
 // ===========================================
 
@@ -77,6 +114,8 @@ impl Effort {
 pub struct Board {
     pub id: String,
     pub name: String,
+    /// Project context for AI operations (optional)
+    pub project_context: Option<ProjectContext>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

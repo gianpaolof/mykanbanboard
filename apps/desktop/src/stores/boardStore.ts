@@ -54,6 +54,9 @@ interface BoardState {
 
   // Actions - Load (legacy, now calls loadBoards)
   loadBoard: () => Promise<void>;
+
+  // Actions - ChromaDB Sync
+  reindexAllTickets: () => Promise<void>;
 }
 
 // Helper to generate UUID
@@ -474,6 +477,18 @@ export const useBoardStore = create<BoardState>()(
             ),
           }));
 
+          // Auto-sync to ChromaDB (fire and forget)
+          api.agent.indexTicket({
+            ticketId: newTicket.id,
+            title: newTicket.title,
+            description: newTicket.description,
+            priority: newTicket.priority,
+            labels: newTicket.labels.map((l) => l.name),
+            columnId: newTicket.columnId,
+          }).catch((err) => {
+            console.warn('Failed to index ticket to ChromaDB:', err);
+          });
+
           return newTicket;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -540,6 +555,18 @@ export const useBoardStore = create<BoardState>()(
             }
             return { tickets: newTickets };
           });
+
+          // Auto-sync to ChromaDB (fire and forget)
+          api.agent.indexTicket({
+            ticketId: updatedTicket.id,
+            title: updatedTicket.title,
+            description: updatedTicket.description,
+            priority: updatedTicket.priority,
+            labels: updatedTicket.labels.map((l) => l.name),
+            columnId: updatedTicket.columnId,
+          }).catch((err) => {
+            console.warn('Failed to index ticket to ChromaDB:', err);
+          });
         } catch (error) {
           // Rollback on error
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -574,6 +601,12 @@ export const useBoardStore = create<BoardState>()(
 
         try {
           await api.tickets.deleteTicket(id);
+
+          // Remove from ChromaDB (fire and forget)
+          api.agent.removeFromIndex(id).catch((err) => {
+            console.warn('Failed to remove ticket from ChromaDB:', err);
+          });
+
           toast.success('Ticket deleted');
         } catch (error) {
           // Rollback on error
@@ -701,6 +734,47 @@ export const useBoardStore = create<BoardState>()(
 
       loadBoard: async () => {
         await get().loadBoards();
+      },
+
+      // ===========================================
+      // CHROMADB SYNC
+      // ===========================================
+
+      reindexAllTickets: async () => {
+        const tickets = get().tickets;
+
+        // Flatten all tickets
+        const allTickets = Object.values(tickets).flat().map((ticket) => ({
+          id: ticket.id,
+          title: ticket.title,
+          description: ticket.description || '',
+          status: '',
+          priority: ticket.priority || 'medium',
+          labels: ticket.labels.map((l) => l.name),
+          column_id: ticket.columnId,
+        }));
+
+        if (allTickets.length === 0) {
+          toast.info('No tickets to reindex');
+          return;
+        }
+
+        try {
+          const result = await api.agent.syncTickets({
+            tickets: allTickets,
+            force_full_sync: true,
+          });
+
+          if (result.success) {
+            toast.success(`Reindexed ${result.synced_count} tickets`);
+          } else {
+            toast.warning(`Only ${result.synced_count}/${result.total_count} tickets indexed`);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('Failed to reindex tickets:', errorMessage);
+          toast.error('Failed to reindex tickets. Make sure the AI agent is running.');
+        }
       },
     }),
     {

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/boardStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { api } from '@/lib/tauri';
 import type { Priority, Effort } from '@/types';
 import type { AgentTriageResult } from '@/lib/tauri';
@@ -44,7 +45,14 @@ export const CreateTicketModal = memo(function CreateTicketModal({
 }: CreateTicketModalProps) {
   const columns = useBoardStore((state) => state.columns);
   const labels = useBoardStore((state) => state.labels);
+  const tickets = useBoardStore((state) => state.tickets);
   const addTicket = useBoardStore((state) => state.addTicket);
+  const currentBoardId = useBoardStore((state) => state.currentBoardId);
+  const board = useBoardStore((state) => state.board);
+
+  // Get project context for AI operations
+  const getAgentProjectContext = useProjectStore((state) => state.getAgentProjectContext);
+  const getAgentBoardContext = useProjectStore((state) => state.getAgentBoardContext);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -108,10 +116,26 @@ export const CreateTicketModal = memo(function CreateTicketModal({
 
     setIsTriaging(true);
     try {
+      // Get contexts for AI
+      const projectContext = getAgentProjectContext();
+      const totalTickets = Object.values(tickets).flat().length;
+      const boardContext = currentBoardId && board
+        ? getAgentBoardContext(
+            currentBoardId,
+            board.name,
+            columns.map((c) => ({ id: c.id, name: c.name })),
+            labels.map((l) => l.name),
+            totalTickets
+          )
+        : undefined;
+
       const result = await api.agent.triage(
         'new-ticket',
         title,
-        description
+        description,
+        labels.map((l) => l.name), // existing labels for the board
+        projectContext,
+        boardContext
       );
       setTriageResult(result);
 
@@ -136,7 +160,7 @@ export const CreateTicketModal = memo(function CreateTicketModal({
     } finally {
       setIsTriaging(false);
     }
-  }, [title, description, labels]);
+  }, [title, description, labels, getAgentProjectContext, getAgentBoardContext, currentBoardId, board, columns, tickets]);
 
   // Toggle label selection
   const handleToggleLabel = useCallback((labelId: string) => {

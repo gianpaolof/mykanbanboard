@@ -8,17 +8,28 @@ import { Header } from '@/components/layout/Header';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { AgentChat, AgentStatsPanel } from '@/components/ai';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { ProjectWizard } from '@/components/settings/ProjectWizard';
 import { CreateBoardModal } from '@/components/boards/CreateBoardModal';
 import { Toaster } from '@/components/ui/Toaster';
 import { useBoardStore, filterTickets } from '@/stores/boardStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useKanbanShortcuts } from '@/hooks/useKeyboardShortcuts';
-import type { FilterConfig } from '@/types';
+import { api, type DailySummaryTicket } from '@/lib/tauri';
+import type { FilterConfig, Ticket } from '@/types';
 
 function App() {
   const loadBoard = useBoardStore((state) => state.loadBoard);
   const isLoading = useBoardStore((state) => state.isLoading);
   const tickets = useBoardStore((state) => state.tickets);
+  const columns = useBoardStore((state) => state.columns);
+  const currentBoardId = useBoardStore((state) => state.currentBoardId);
+
+  // Project wizard state
+  const showWizard = useProjectStore((state) => state.showWizard);
+  const closeWizard = useProjectStore((state) => state.closeWizard);
+  const isWizardCompleted = useProjectStore((state) => state.isWizardCompleted);
+  const openWizard = useProjectStore((state) => state.openWizard);
 
   // UI State
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -54,6 +65,14 @@ function App() {
     loadBoard();
   }, [loadBoard]);
 
+  // Check if wizard should be shown for first-time users
+  useEffect(() => {
+    if (currentBoardId && !isLoading && !isWizardCompleted(currentBoardId)) {
+      // Show wizard if board has never been configured
+      openWizard();
+    }
+  }, [currentBoardId, isLoading, isWizardCompleted, openWizard]);
+
   // Handlers
   const handleCreateTicket = useCallback((columnId?: string) => {
     setCreateTicketColumnId(columnId);
@@ -76,9 +95,91 @@ function App() {
     setSidebarCollapsed((prev) => !prev);
   }, []);
 
-  const handleDailySummary = useCallback(() => {
-    toast.info('Daily summary coming soon');
-  }, []);
+  const handleDailySummary = useCallback(async () => {
+    // Helper to convert ticket to DailySummaryTicket format
+    const toSummaryTicket = (ticket: Ticket): DailySummaryTicket => ({
+      id: ticket.id,
+      title: ticket.title,
+      description: ticket.description,
+      priority: ticket.priority,
+      labels: ticket.labels.map((l) => l.name),
+      due_date: ticket.dueDate,
+      column_id: ticket.columnId,
+    });
+
+    // Categorize tickets by column name patterns
+    const allTickets = Object.values(tickets).flat();
+
+    // Find columns by name patterns
+    const inProgressColIds = columns
+      .filter((c) => /in.?progress|doing|working|active/i.test(c.name))
+      .map((c) => c.id);
+    const blockedColIds = columns
+      .filter((c) => /block|stuck|waiting|on.?hold/i.test(c.name))
+      .map((c) => c.id);
+    const doneColIds = columns
+      .filter((c) => /done|complete|finish|closed/i.test(c.name))
+      .map((c) => c.id);
+
+    // Categorize tickets
+    const inProgress = allTickets
+      .filter((t) => inProgressColIds.includes(t.columnId))
+      .map(toSummaryTicket);
+
+    const blocked = allTickets
+      .filter((t) => blockedColIds.includes(t.columnId))
+      .map(toSummaryTicket);
+
+    // Due soon = tickets with due date in next 3 days (not done)
+    const now = new Date();
+    const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const dueSoon = allTickets
+      .filter((t) => {
+        if (!t.dueDate || doneColIds.includes(t.columnId)) return false;
+        const due = new Date(t.dueDate);
+        return due >= now && due <= threeDaysFromNow;
+      })
+      .map(toSummaryTicket);
+
+    // Recently completed = done in last 24 hours (if we had updatedAt, use that)
+    // For now, just take last 5 from done columns
+    const recentlyCompleted = allTickets
+      .filter((t) => doneColIds.includes(t.columnId))
+      .slice(-5)
+      .map(toSummaryTicket);
+
+    // Show loading toast
+    const loadingToast = toast.loading('Generating daily summary...');
+
+    try {
+      const result = await api.agent.dailySummary({
+        in_progress: inProgress,
+        blocked: blocked,
+        due_soon: dueSoon,
+        recently_completed: recentlyCompleted,
+      });
+
+      toast.dismiss(loadingToast);
+
+      // Show summary in a nice toast
+      const summaryMessage = [
+        result.greeting,
+        '',
+        result.focus_today.length > 0 ? `Focus today: ${result.focus_today.join(', ')}` : '',
+        result.blockers.length > 0 ? `Blockers: ${result.blockers.join(', ')}` : '',
+        result.quick_wins.length > 0 ? `Quick wins: ${result.quick_wins.join(', ')}` : '',
+      ].filter(Boolean).join('\n');
+
+      toast.success(summaryMessage, {
+        duration: 10000,
+        style: { whiteSpace: 'pre-line' },
+      });
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      console.error('Daily summary failed:', error);
+      toast.error('Failed to generate daily summary. Make sure the AI agent is running.');
+    }
+  }, [tickets, columns]);
 
   const handleSettings = useCallback(() => {
     setSettingsOpen(true);
@@ -197,6 +298,12 @@ function App() {
       <CreateBoardModal
         isOpen={createBoardOpen}
         onClose={() => setCreateBoardOpen(false)}
+      />
+
+      {/* Project Setup Wizard */}
+      <ProjectWizard
+        open={showWizard}
+        onClose={closeWizard}
       />
 
       {/* Toast Notifications */}

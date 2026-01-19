@@ -1,23 +1,25 @@
 // components/settings/SettingsModal.tsx - Main settings modal
 import { useState, memo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Palette, Bot, Keyboard, Database } from 'lucide-react';
+import { X, Palette, Bot, Keyboard, Database, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AppearanceSettings } from './AppearanceSettings';
 import { AISettings } from './AISettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { DataManagementSettings } from './DataManagementSettings';
+import { ProjectSettings } from './ProjectSettings';
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-type SettingsTab = 'appearance' | 'ai' | 'data' | 'shortcuts';
+type SettingsTab = 'appearance' | 'ai' | 'project' | 'data' | 'shortcuts';
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Palette }[] = [
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'ai', label: 'AI Agent', icon: Bot },
+  { id: 'project', label: 'Project', icon: Sparkles },
   { id: 'data', label: 'Data', icon: Database },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
 ];
@@ -128,6 +130,7 @@ export const SettingsModal = memo(function SettingsModal({
                     >
                       {activeTab === 'appearance' && <AppearanceSettings />}
                       {activeTab === 'ai' && <AISettings />}
+                      {activeTab === 'project' && <ProjectSettings />}
                       {activeTab === 'data' && <DataManagementSettings />}
                       {activeTab === 'shortcuts' && <KeyboardShortcutsSettings />}
                     </motion.div>

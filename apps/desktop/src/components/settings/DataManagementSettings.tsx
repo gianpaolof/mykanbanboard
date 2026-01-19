@@ -1,6 +1,6 @@
 // components/settings/DataManagementSettings.tsx - Export/Import data
 import { useState, useRef, useCallback } from 'react';
-import { Download, Upload, FileJson, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Download, Upload, FileJson, CheckCircle2, AlertCircle, Loader2, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/boardStore';
@@ -31,8 +31,11 @@ export function DataManagementSettings() {
   const setLabels = useBoardStore((state) => state.setLabels);
   const setTickets = useBoardStore((state) => state.setTickets);
 
+  const reindexAllTickets = useBoardStore((state) => state.reindexAllTickets);
+
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isReindexing, setIsReindexing] = useState(false);
   const [importMode, setImportMode] = useState<ImportMode>('replace');
   const [importPreview, setImportPreview] = useState<{
     data: ExportData;
@@ -180,8 +183,65 @@ export function DataManagementSettings() {
   // Count current items
   const ticketCount = Object.values(tickets).reduce((sum, arr) => sum + arr.length, 0);
 
+  // ===========================================
+  // REINDEX
+  // ===========================================
+
+  const handleReindex = useCallback(async () => {
+    setIsReindexing(true);
+    try {
+      await reindexAllTickets();
+    } finally {
+      setIsReindexing(false);
+    }
+  }, [reindexAllTickets]);
+
   return (
     <div className="space-y-8">
+      {/* Reindex AI Search Section */}
+      <SettingsSection
+        title="AI Search Index"
+        description="Rebuild the semantic search index for AI-powered ticket search"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 p-4 rounded-lg bg-bg-tertiary border border-border-subtle">
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+              <Search className="w-5 h-5 text-indigo-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary">
+                Semantic Search
+              </p>
+              <p className="text-xs text-text-muted">
+                {ticketCount} tickets available for AI-powered search
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleReindex}
+            disabled={isReindexing || ticketCount === 0}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2.5 rounded-lg',
+              'bg-indigo-600 text-white font-medium text-sm',
+              'hover:bg-indigo-700 transition-colors',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            {isReindexing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            <span>{isReindexing ? 'Reindexing...' : 'Rebuild Search Index'}</span>
+          </button>
+
+          <p className="text-xs text-text-muted">
+            Tickets are automatically indexed when created or updated. Use this if search results seem out of date.
+          </p>
+        </div>
+      </SettingsSection>
+
       {/* Export Section */}
       <SettingsSection
         title="Export Data"

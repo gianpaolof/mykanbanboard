@@ -27,6 +27,55 @@ import type {
 // BOARD API
 // ===========================================
 
+// ===========================================
+// PROJECT CONTEXT TYPES
+// ===========================================
+
+/**
+ * Project context for AI operations
+ */
+export interface ProjectContext {
+  techStack: string[];
+  conventions?: string;
+  priorityRules?: Record<string, unknown>;
+  architecture?: string;
+  description?: string;
+  defaultLabels: string[];
+}
+
+/**
+ * Partial project context for updates
+ */
+export interface UpdateProjectContext {
+  techStack?: string[];
+  conventions?: string;
+  priorityRules?: Record<string, unknown>;
+  architecture?: string;
+  description?: string;
+  defaultLabels?: string[];
+}
+
+/**
+ * Agent project context (for AI calls)
+ */
+export interface AgentProjectContext {
+  techStack: string[];
+  conventions?: string;
+  priorityRules?: Record<string, unknown>;
+  architecture?: string;
+}
+
+/**
+ * Agent board context (for AI calls)
+ */
+export interface AgentBoardContext {
+  boardId: string;
+  boardName: string;
+  columns: Array<{ id: string; name: string }>;
+  labels: string[];
+  totalTickets: number;
+}
+
 export const boardApi = {
   /**
    * Get or create the default board
@@ -59,6 +108,36 @@ export const boardApi = {
    * Delete a board
    */
   deleteBoard: (id: string) => invoke<void>('delete_board', { id }),
+};
+
+// ===========================================
+// PROJECT CONTEXT API
+// ===========================================
+
+export const projectContextApi = {
+  /**
+   * Get project context for a board
+   */
+  getProjectContext: (boardId: string) =>
+    invoke<ProjectContext | null>('get_project_context', { boardId }),
+
+  /**
+   * Update project context (merges with existing)
+   */
+  updateProjectContext: (boardId: string, context: UpdateProjectContext) =>
+    invoke<ProjectContext>('update_project_context', { boardId, context }),
+
+  /**
+   * Set project context (replaces entirely)
+   */
+  setProjectContext: (boardId: string, context: ProjectContext) =>
+    invoke<ProjectContext>('set_project_context', { boardId, context }),
+
+  /**
+   * Delete project context for a board
+   */
+  deleteProjectContext: (boardId: string) =>
+    invoke<void>('delete_project_context', { boardId }),
 };
 
 // ===========================================
@@ -304,22 +383,44 @@ export interface CacheStats {
 export const agentApi = {
   /**
    * Auto-triage a ticket: assign priority, labels, and effort estimate
+   * Now supports optional project context and board context for context-aware triage
    */
-  triage: (ticketId: string, title: string, description: string) =>
+  triage: (
+    ticketId: string,
+    title: string,
+    description: string,
+    existingLabels?: string[],
+    projectContext?: AgentProjectContext,
+    boardContext?: AgentBoardContext
+  ) =>
     invoke<AgentTriageResult>('agent_triage', {
       ticketId,
       title,
       description,
+      existingLabels: existingLabels ?? null,
+      projectContext: projectContext ?? null,
+      boardContext: boardContext ?? null,
     }),
 
   /**
    * Decompose a complex task into subtasks
+   * Now supports optional project context and board context for context-aware decomposition
    */
-  decompose: (ticketId: string, title: string, description: string) =>
+  decompose: (
+    ticketId: string,
+    title: string,
+    description: string,
+    context?: string,
+    projectContext?: AgentProjectContext,
+    boardContext?: AgentBoardContext
+  ) =>
     invoke<AgentDecomposeResult>('agent_decompose', {
       ticketId,
       title,
       description,
+      context: context ?? null,
+      projectContext: projectContext ?? null,
+      boardContext: boardContext ?? null,
     }),
 
   /**
@@ -378,6 +479,40 @@ export const agentApi = {
    */
   getCacheStats: () =>
     invoke<CacheStats>('agent_cache_stats'),
+
+  /**
+   * Index a single ticket to ChromaDB
+   * Call after creating or updating a ticket
+   */
+  indexTicket: (request: {
+    ticketId: string;
+    title: string;
+    description?: string;
+    status?: string;
+    priority?: string;
+    labels?: string[];
+    columnId?: string;
+  }) =>
+    invoke<{ success: boolean; ticket_id: string; action: string }>('agent_index_ticket', {
+      request: {
+        ticketId: request.ticketId,
+        title: request.title,
+        description: request.description ?? '',
+        status: request.status ?? '',
+        priority: request.priority ?? 'medium',
+        labels: request.labels ?? [],
+        columnId: request.columnId ?? '',
+      },
+    }),
+
+  /**
+   * Remove a ticket from ChromaDB index
+   * Call after deleting a ticket
+   */
+  removeFromIndex: (ticketId: string) =>
+    invoke<{ success: boolean; ticket_id: string; action: string }>('agent_remove_from_index', {
+      ticketId,
+    }),
 };
 
 // ===========================================
@@ -439,6 +574,7 @@ export const api = {
   subtasks: subtaskApi,
   agent: agentApi,
   automations: automationApi,
+  projectContext: projectContextApi,
 };
 
 export default api;

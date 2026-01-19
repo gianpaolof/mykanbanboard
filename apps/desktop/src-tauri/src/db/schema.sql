@@ -7,6 +7,9 @@
 CREATE TABLE IF NOT EXISTS boards (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,
+    -- Project context for AI operations (JSON)
+    -- Contains: tech_stack, conventions, priority_rules, architecture
+    project_context TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
