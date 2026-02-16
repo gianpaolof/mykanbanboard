@@ -434,7 +434,7 @@ export const agentApi = {
     invoke<AgentChatResult>('agent_chat', {
       message,
       context: context ?? null,
-      board_context: boardContext ?? null,
+      boardContext: boardContext ?? null,
     }),
 
   /**
