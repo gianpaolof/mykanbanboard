@@ -210,7 +210,11 @@ def extract_value(obj: Any) -> Any:
 
     # If it's a list, extract each item
     if isinstance(obj, list):
-        return [extract_value(item) for item in obj]
+        extracted = [extract_value(item) for item in obj]
+        # Unwrap single-element lists (DSPy sometimes returns these)
+        if len(extracted) == 1:
+            return extracted[0]
+        return extracted
 
     # If it's a dict, extract each value
     if isinstance(obj, dict):
@@ -331,18 +335,25 @@ async def triage_ticket(
 
             DSPy 3.x stores values directly as attributes. We access them
             via __dict__ or getattr, avoiding fragile string parsing.
+            Also unwraps single-element lists.
             """
             # Method 1: Direct __dict__ access (most reliable)
             if hasattr(obj, '__dict__') and attr_name in obj.__dict__:
                 val = obj.__dict__[attr_name]
                 # Skip callables and internal attributes
                 if not callable(val) and not attr_name.startswith('_'):
+                    # Unwrap single-element lists
+                    if isinstance(val, list) and len(val) == 1:
+                        return val[0]
                     return val
 
             # Method 2: Try getattr with filtering
             try:
                 val = getattr(obj, attr_name, None)
                 if val is not None and not callable(val):
+                    # Unwrap single-element lists
+                    if isinstance(val, list) and len(val) == 1:
+                        return val[0]
                     return val
             except:
                 pass
