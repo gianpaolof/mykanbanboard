@@ -20,7 +20,7 @@ import type { Priority } from '@/types';
 // CONSTANTS
 // ===========================================
 
-const REQUEST_TIMEOUT_MS = 15000; // 15 seconds timeout
+const REQUEST_TIMEOUT_MS = 25000; // 25 seconds timeout (buffer over Python 20s)
 
 // ===========================================
 // TYPES

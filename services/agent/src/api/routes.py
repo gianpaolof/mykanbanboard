@@ -128,7 +128,7 @@ router = APIRouter(prefix="/api")
 # Timeout constants (in seconds)
 TRIAGE_TIMEOUT = 12
 DECOMPOSE_TIMEOUT = 12
-CHAT_TIMEOUT = 12
+CHAT_TIMEOUT = 20  # Increased from 12s to give AI more time
 DAILY_SUMMARY_TIMEOUT = 10
 
 
@@ -184,15 +184,39 @@ def extract_value(obj: Any) -> Any:
     """
     if obj is None:
         return None
-    # If it's a bound method, it's wrong - return as string
+
+    # Handle DSPy Prediction objects - extract the actual attribute value
+    if hasattr(obj, '__class__') and 'Prediction' in obj.__class__.__name__:
+        # For Prediction objects, try to get the actual stored value
+        # DSPy stores values in _store or as direct attributes
+        if hasattr(obj, '_store'):
+            return extract_value(obj._store)
+        # Try to convert to dict and extract
+        try:
+            if hasattr(obj, '__dict__'):
+                return extract_value(obj.__dict__)
+        except:
+            pass
+
+    # If it's a bound method, try calling it, otherwise return None
     if callable(obj):
-        return str(obj)
+        try:
+            # Try calling without arguments
+            result = obj()
+            return extract_value(result)
+        except:
+            # If calling fails, return None instead of ugly string
+            return None
+
     # If it's a list, extract each item
     if isinstance(obj, list):
         return [extract_value(item) for item in obj]
+
     # If it's a dict, extract each value
     if isinstance(obj, dict):
-        return {k: extract_value(v) for k, v in obj.items()}
+        # Skip internal attributes
+        return {k: extract_value(v) for k, v in obj.items() if not k.startswith('_')}
+
     return obj
 
 
@@ -301,13 +325,45 @@ async def triage_ticket(
 
         result = await run_sync_with_timeout(run_triage, TRIAGE_TIMEOUT, "Triage")
 
-        # Extract values from DSPy prediction object and ensure labels is a list
-        priority = extract_value(result.priority)
-        labels_raw = extract_value(result.labels)
-        labels = labels_raw if isinstance(labels_raw, list) else [labels_raw]
-        labels = [str(l) for l in labels[:3]]  # Ensure strings and limit to 3
-        effort = extract_value(result.effort_estimate)
-        reasoning = extract_value(result.reasoning)
+        # Extract values from DSPy prediction object (DSPy 3.x)
+        def safe_extract(obj, attr_name, default=None):
+            """Safely extract attribute from DSPy Prediction object.
+
+            DSPy 3.x stores values directly as attributes. We access them
+            via __dict__ or getattr, avoiding fragile string parsing.
+            """
+            # Method 1: Direct __dict__ access (most reliable)
+            if hasattr(obj, '__dict__') and attr_name in obj.__dict__:
+                val = obj.__dict__[attr_name]
+                # Skip callables and internal attributes
+                if not callable(val) and not attr_name.startswith('_'):
+                    return val
+
+            # Method 2: Try getattr with filtering
+            try:
+                val = getattr(obj, attr_name, None)
+                if val is not None and not callable(val):
+                    return val
+            except:
+                pass
+
+            # Method 3: Fallback to default
+            return default
+
+        priority = safe_extract(result, 'priority', 'medium')
+        labels_raw = safe_extract(result, 'labels', [])
+
+        # Normalize labels to list of strings
+        if isinstance(labels_raw, str):
+            labels = [v.strip() for v in labels_raw.split(',') if v.strip()]
+        elif isinstance(labels_raw, list):
+            labels = [str(l) for l in labels_raw if l and isinstance(l, str)]
+        else:
+            labels = []
+        labels = labels[:3]  # Limit to 3
+
+        effort = safe_extract(result, 'effort_estimate', 'm')
+        reasoning = safe_extract(result, 'reasoning', '')
 
         return TriageResponse(
             priority=priority,
