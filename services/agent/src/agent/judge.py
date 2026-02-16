@@ -2,6 +2,13 @@
 
 import dspy
 
+# Compatibility shim for dspy.Assert (removed in DSPy 3.x)
+if not hasattr(dspy, 'Assert'):
+    def _dspy_assert(condition: bool, message: str) -> None:
+        if not condition:
+            raise AssertionError(message)
+    dspy.Assert = _dspy_assert
+
 
 class JudgeTicketQuality(dspy.Signature):
     """Evaluate the quality of a Kanban ticket.
