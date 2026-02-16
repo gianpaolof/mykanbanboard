@@ -30,12 +30,12 @@ class TestTriageEndpoint:
             # Verify response structure
             assert "priority" in data
             assert "labels" in data
-            assert "effort_estimate" in data
+            assert "effort" in data  # Fixed: API uses 'effort' not 'effort_estimate'
             assert "reasoning" in data
 
             # Verify valid values
             assert data["priority"] in ["low", "medium", "high", "critical"]
-            assert data["effort_estimate"] in ["xs", "s", "m", "l", "xl"]
+            assert data["effort"] in ["xs", "s", "m", "l", "xl"]
             assert isinstance(data["labels"], list)
 
     async def test_triage_returns_correct_format(self, client, sample_ticket):
@@ -57,7 +57,7 @@ class TestTriageEndpoint:
 
             assert data["priority"] == "high"
             assert "bug" in data["labels"]
-            assert data["effort_estimate"] == "m"
+            assert data["effort"] == "m"  # Fixed: API uses 'effort'
             assert len(data["reasoning"]) >= 20
 
 
