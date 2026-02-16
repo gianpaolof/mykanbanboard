@@ -176,6 +176,17 @@ def run_sync_with_timeout(func, timeout_seconds: int, operation_name: str):
     return run_with_timeout(wrapper(), timeout_seconds, operation_name)
 
 
+def unwrap_single_element_list(value: Any) -> Any:
+    """Unwrap single-element lists (DSPy 3.x issue).
+
+    DSPy sometimes returns values as single-element lists.
+    This helper ensures they're unwrapped to the actual value.
+    """
+    if isinstance(value, list) and len(value) == 1:
+        return value[0]
+    return value
+
+
 def extract_value(obj: Any) -> Any:
     """Extract value from DSPy prediction object.
 
@@ -364,11 +375,29 @@ async def triage_ticket(
         priority = safe_extract(result, 'priority', 'medium')
         labels_raw = safe_extract(result, 'labels', [])
 
+        # Additional unwrapping for single-element lists (DSPy 3.x issue)
+        if isinstance(priority, list) and len(priority) == 1:
+            priority = priority[0]
+
         # Normalize labels to list of strings
         if isinstance(labels_raw, str):
             labels = [v.strip() for v in labels_raw.split(',') if v.strip()]
         elif isinstance(labels_raw, list):
-            labels = [str(l) for l in labels_raw if l and isinstance(l, str)]
+            # Filter out non-string items and bound methods
+            labels = []
+            for l in labels_raw:
+                if isinstance(l, str) and not l.startswith('<bound method'):
+                    labels.append(l)
+                elif callable(l):
+                    # If it's a callable (bound method), try calling it
+                    try:
+                        result_val = l()
+                        if isinstance(result_val, str):
+                            labels.append(result_val)
+                        elif isinstance(result_val, list):
+                            labels.extend([str(v) for v in result_val if isinstance(v, str)])
+                    except:
+                        pass
         else:
             labels = []
         labels = labels[:3]  # Limit to 3
@@ -376,11 +405,17 @@ async def triage_ticket(
         effort = safe_extract(result, 'effort_estimate', 'm')
         reasoning = safe_extract(result, 'reasoning', '')
 
+        # Additional unwrapping for single-element lists (DSPy 3.x issue)
+        if isinstance(effort, list) and len(effort) == 1:
+            effort = effort[0]
+        if isinstance(reasoning, list) and len(reasoning) == 1:
+            reasoning = reasoning[0]
+
         return TriageResponse(
-            priority=priority,
+            priority=unwrap_single_element_list(priority),
             labels=labels,
-            effort=effort,
-            reasoning=reasoning,
+            effort=unwrap_single_element_list(effort),
+            reasoning=unwrap_single_element_list(reasoning),
         )
 
     except HTTPException:
