@@ -426,10 +426,15 @@ export const agentApi = {
   /**
    * Chat with the AI agent
    */
-  chat: (message: string, context?: Record<string, unknown>) =>
+  chat: (
+    message: string,
+    context?: Record<string, unknown>,
+    boardContext?: Record<string, unknown>
+  ) =>
     invoke<AgentChatResult>('agent_chat', {
       message,
       context: context ?? null,
+      board_context: boardContext ?? null,
     }),
 
   /**
