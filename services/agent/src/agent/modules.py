@@ -3,6 +3,39 @@
 from typing import Literal
 import dspy
 
+
+# ============================================================================
+# COMPATIBILITY SHIM FOR DSPY.ASSERT (removed in DSPy 3.x)
+# ============================================================================
+
+def _dspy_assert(condition: bool, message: str) -> None:
+    """Compatibility shim for dspy.Assert which was removed in DSPy 3.x.
+
+    Args:
+        condition: Condition to check
+        message: Error message if condition is False
+
+    Raises:
+        AssertionError: If condition is False
+    """
+    if not condition:
+        raise AssertionError(message)
+
+# Monkey-patch dspy.Assert if it doesn't exist
+if not hasattr(dspy, 'Assert'):
+    dspy.Assert = _dspy_assert
+
+# Monkey-patch dspy.Suggest (was soft constraint, now just logs)
+if not hasattr(dspy, 'Suggest'):
+    import logging
+    logger = logging.getLogger(__name__)
+    def _dspy_suggest(condition: bool, message: str) -> None:
+        """Compatibility shim for dspy.Suggest - logs warning instead of failing."""
+        if not condition:
+            logger.warning(f"Suggestion: {message}")
+    dspy.Suggest = _dspy_suggest
+
+
 # ============================================================================
 # VALID VALUES (used for assertions)
 # ============================================================================
@@ -96,6 +129,16 @@ class TriageModule(dspy.Module):
             existing_labels=existing_labels,
         )
 
+        # Normalize labels to list if needed
+        if not isinstance(result.labels, list):
+            if isinstance(result.labels, str):
+                # Split comma-separated string or wrap single label
+                result.labels = [label.strip() for label in result.labels.split(',') if label.strip()]
+            elif result.labels is None:
+                result.labels = []
+            else:
+                result.labels = [str(result.labels)]
+
         # Hard constraints - will retry automatically if failed
         dspy.Assert(
             result.priority in VALID_PRIORITIES,
@@ -104,10 +147,6 @@ class TriageModule(dspy.Module):
         dspy.Assert(
             result.effort_estimate in VALID_EFFORTS,
             f"Effort '{result.effort_estimate}' is invalid. Must be one of: {VALID_EFFORTS}",
-        )
-        dspy.Assert(
-            isinstance(result.labels, list),
-            "Labels must be a list of strings",
         )
 
         # Soft constraints - will log warning but continue
@@ -481,6 +520,9 @@ class ActionDecider(dspy.Signature):
     current_context: dict = dspy.InputField(
         desc="Current board context (tickets, view, filters)"
     )
+    board_context: dict = dspy.InputField(
+        desc="Board metadata (board_id, board_name, columns, labels)"
+    )
 
     action: Literal[
         "create",
@@ -506,12 +548,13 @@ class ActionDeciderModule(dspy.Module):
         super().__init__()
         self.decide = dspy.ChainOfThought(ActionDecider)
 
-    def forward(self, user_message: str, current_context: dict):
+    def forward(self, user_message: str, current_context: dict, board_context: dict | None = None):
         """Decide action based on user message.
 
         Args:
             user_message: User's message
             current_context: Current board state
+            board_context: Board metadata (board_id, columns, labels)
 
         Returns:
             Action decision with action type, params, and response
@@ -519,6 +562,7 @@ class ActionDeciderModule(dspy.Module):
         result = self.decide(
             user_message=user_message,
             current_context=current_context,
+            board_context=board_context or {},
         )
 
         # Hard constraints
@@ -552,6 +596,11 @@ class ActionDeciderModule(dspy.Module):
             len(result.response) <= 500,
             "Response should be concise (under 500 chars)",
         )
+
+        # Inject board_id into create action params if available
+        if result.action == "create" and board_context:
+            if "board_id" in board_context and "board_id" not in result.params:
+                result.params["board_id"] = board_context["board_id"]
 
         return result
 

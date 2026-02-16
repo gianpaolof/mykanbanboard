@@ -74,7 +74,11 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message")
     context: dict | None = Field(
         default=None,
-        description="Current board context",
+        description="Current context (legacy field)",
+    )
+    board_context: dict | None = Field(
+        default=None,
+        description="Board context (board_id, columns, labels)",
     )
 
 

@@ -551,6 +551,7 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
             return action_decider(
                 user_message=request.message,
                 current_context=request.context or {},
+                board_context=request.board_context or {},
             )
 
         result = await run_sync_with_timeout(run_chat, CHAT_TIMEOUT, "Chat")

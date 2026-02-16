@@ -268,6 +268,8 @@ struct ChatRequest {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     context: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    board_context: Option<AgentBoardContext>,
 }
 
 #[derive(Debug, Serialize)]
@@ -436,11 +438,19 @@ pub async fn agent_decompose(
 
 /// Chat with the AI agent
 #[tauri::command]
-pub async fn agent_chat(message: String, context: Option<Value>) -> Result<Value, String> {
+pub async fn agent_chat(
+    message: String,
+    context: Option<Value>,
+    board_context: Option<AgentBoardContext>,
+) -> Result<Value, String> {
     let client = create_http_client()?;
     let url = format!("{}/chat", AGENT_BASE_URL);
 
-    let request_body = ChatRequest { message, context };
+    let request_body = ChatRequest {
+        message,
+        context,
+        board_context,
+    };
 
     let response = client
         .post(&url)
