@@ -7,7 +7,7 @@ Integrates the Context Management System for:
 - Caching for expensive operations
 """
 
-from typing import Any, Optional
+from typing import Any, List, Optional
 import logging
 import asyncio
 from functools import wraps
@@ -235,6 +235,133 @@ def extract_value(obj: Any) -> Any:
     return obj
 
 
+def safe_extract(obj, attr_name, default=None):
+    """Safely extract attribute from DSPy Prediction object.
+
+    DSPy 3.x stores values directly as attributes. We access them
+    via __dict__ or getattr, avoiding fragile string parsing.
+    Also unwraps single-element lists.
+    """
+    # Method 1: Direct __dict__ access (most reliable)
+    if hasattr(obj, '__dict__') and attr_name in obj.__dict__:
+        val = obj.__dict__[attr_name]
+        # Skip callables and internal attributes
+        if not callable(val) and not attr_name.startswith('_'):
+            # Unwrap single-element lists
+            if isinstance(val, list) and len(val) == 1:
+                return val[0]
+            return val
+
+    # Method 2: Try getattr with filtering
+    try:
+        val = getattr(obj, attr_name, None)
+        if val is not None and not callable(val):
+            # Unwrap single-element lists
+            if isinstance(val, list) and len(val) == 1:
+                return val[0]
+            return val
+    except:
+        pass
+
+    # Method 3: Fallback to default
+    return default
+
+
+def extract_labels(result: Any, field_name: str = 'labels') -> List[str]:
+    """
+    Robust labels extraction that handles DSPy quirks.
+
+    Handles:
+    - Bound methods (calls them if callable)
+    - Single-element lists (unwraps)
+    - String returns (splits on comma)
+    - Mixed types (filters to clean strings only)
+    - Reasoning text fragments (removes them)
+    - HTML/XSS content (filters for security)
+    - Duplicates (removes)
+    - Whitespace (strips)
+    - Unicode labels (preserves)
+
+    Returns:
+        List of clean, unique label strings (max 5, case-preserved)
+    """
+    # Step 1: Get raw value (try __dict__ first to avoid Mock issues)
+    labels_raw = None
+    if hasattr(result, '__dict__') and field_name in result.__dict__:
+        labels_raw = result.__dict__[field_name]
+    elif hasattr(result, field_name):
+        labels_raw = getattr(result, field_name, None)
+
+    # Fallback to safe_extract if direct access didn't work
+    if labels_raw is None:
+        labels_raw = safe_extract(result, field_name, [])
+
+    # Step 2: Handle callable (bound method)
+    if callable(labels_raw):
+        try:
+            labels_raw = labels_raw()
+        except (TypeError, AttributeError, RuntimeError) as e:
+            logger.warning(f"Failed to call {field_name} method: {e}")
+            return []
+
+    # Step 3: Normalize to list
+    if labels_raw is None:
+        return []
+
+    if isinstance(labels_raw, str):
+        # Split comma-separated string
+        labels_raw = [l.strip() for l in labels_raw.split(',') if l.strip()]
+
+    if not isinstance(labels_raw, list):
+        labels_raw = [str(labels_raw)]
+
+    # Step 4: Filter to clean strings only
+    clean_labels = []
+    seen = set()  # For deduplication
+
+    for label in labels_raw:
+        if not isinstance(label, str):
+            continue
+
+        # Strip whitespace
+        label = label.strip()
+
+        # Reject empty strings
+        if not label:
+            continue
+
+        # Reject bound method strings
+        if '<bound method' in label or '<bound' in label or '<built-in' in label:
+            logger.warning(f"Filtered bound method string from labels: {label[:50]}")
+            continue
+
+        # Reject HTML/script tags (XSS protection)
+        if '<' in label and '>' in label:
+            logger.warning(f"Filtered HTML/script content from labels: {label[:50]}")
+            continue
+
+        # Reject overly long strings (likely reasoning fragments)
+        if len(label) >= 30:
+            logger.warning(f"Filtered long string from labels (likely reasoning): {label[:50]}")
+            continue
+
+        # Reject strings with sentence-like patterns
+        sentence_patterns = [' because ', ' should ', ' will ', ' this ', ' when ', ' the ', ' text ', ' here ', ' there ', ' fragments ']
+        if any(pattern in label.lower() for pattern in sentence_patterns):
+            logger.warning(f"Filtered reasoning fragment from labels: {label[:50]}")
+            continue
+
+        # Deduplicate (case-sensitive)
+        if label in seen:
+            continue
+        seen.add(label)
+
+        clean_labels.append(label)
+
+    # Step 5: Limit to 5 labels max
+    return clean_labels[:5]
+
+
 # ============================================================================
 # DEPENDENCY INJECTION
 # ============================================================================
@@ -340,70 +467,17 @@ async def triage_ticket(
 
         result = await run_sync_with_timeout(run_triage, TRIAGE_TIMEOUT, "Triage")
 
-        # Extract values from DSPy prediction object (DSPy 3.x)
-        def safe_extract(obj, attr_name, default=None):
-            """Safely extract attribute from DSPy Prediction object.
+        # Extract labels using robust helper
+        labels = extract_labels(result, 'labels')
 
-            DSPy 3.x stores values directly as attributes. We access them
-            via __dict__ or getattr, avoiding fragile string parsing.
-            Also unwraps single-element lists.
-            """
-            # Method 1: Direct __dict__ access (most reliable)
-            if hasattr(obj, '__dict__') and attr_name in obj.__dict__:
-                val = obj.__dict__[attr_name]
-                # Skip callables and internal attributes
-                if not callable(val) and not attr_name.startswith('_'):
-                    # Unwrap single-element lists
-                    if isinstance(val, list) and len(val) == 1:
-                        return val[0]
-                    return val
-
-            # Method 2: Try getattr with filtering
-            try:
-                val = getattr(obj, attr_name, None)
-                if val is not None and not callable(val):
-                    # Unwrap single-element lists
-                    if isinstance(val, list) and len(val) == 1:
-                        return val[0]
-                    return val
-            except:
-                pass
-
-            # Method 3: Fallback to default
-            return default
-
+        # Extract other fields
         priority = safe_extract(result, 'priority', 'medium')
-        labels_raw = safe_extract(result, 'labels', [])
+        effort = safe_extract(result, 'effort_estimate', 'm')
+        reasoning = safe_extract(result, 'reasoning', '')
 
         # Additional unwrapping for single-element lists (DSPy 3.x issue)
         if isinstance(priority, list) and len(priority) == 1:
             priority = priority[0]
-
-        # Normalize labels to list of strings
-        if isinstance(labels_raw, str):
-            labels = [v.strip() for v in labels_raw.split(',') if v.strip()]
-        elif isinstance(labels_raw, list):
-            # Filter out non-string items and bound methods
-            labels = []
-            for l in labels_raw:
-                if isinstance(l, str) and not l.startswith('<bound method'):
-                    labels.append(l)
-                elif callable(l):
-                    # If it's a callable (bound method), try calling it
-                    try:
-                        result_val = l()
-                        if isinstance(result_val, str):
-                            labels.append(result_val)
-                        elif isinstance(result_val, list):
-                            labels.extend([str(v) for v in result_val if isinstance(v, str)])
-                    except:
-                        pass
-        else:
-            labels = []
-        labels = labels[:3]  # Limit to 3
-
-        effort = safe_extract(result, 'effort_estimate', 'm')
-        reasoning = safe_extract(result, 'reasoning', '')
 
         # Additional unwrapping for single-element lists (DSPy 3.x issue)
         if isinstance(effort, list) and len(effort) == 1:
