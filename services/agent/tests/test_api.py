@@ -32,10 +32,10 @@ class TestRootEndpoint:
 class TestTriageEndpoint:
     """Tests for triage endpoint."""
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_triage_ticket(self, client: TestClient, sample_ticket):
+    @pytest.mark.live_api
+    def test_triage_ticket(self, live_client: TestClient, sample_ticket):
         """Test ticket triage."""
-        response = client.post("/api/triage", json=sample_ticket)
+        response = live_client.post("/api/triage", json=sample_ticket)
         assert response.status_code == 200
         data = response.json()
 
@@ -61,10 +61,10 @@ class TestTriageEndpoint:
 class TestDecomposeEndpoint:
     """Tests for decompose endpoint."""
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_decompose_task(self, client: TestClient, sample_complex_task):
+    @pytest.mark.live_api
+    def test_decompose_task(self, live_client: TestClient, sample_complex_task):
         """Test task decomposition."""
-        response = client.post("/api/decompose", json=sample_complex_task)
+        response = live_client.post("/api/decompose", json=sample_complex_task)
         assert response.status_code == 200
         data = response.json()
 
@@ -87,10 +87,10 @@ class TestDecomposeEndpoint:
 class TestChatEndpoint:
     """Tests for chat endpoint."""
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_chat(self, client: TestClient, sample_chat_context):
+    @pytest.mark.live_api
+    def test_chat(self, live_client: TestClient, sample_chat_context):
         """Test chat interaction."""
-        response = client.post(
+        response = live_client.post(
             "/api/chat",
             json={
                 "message": "What should I focus on today?",

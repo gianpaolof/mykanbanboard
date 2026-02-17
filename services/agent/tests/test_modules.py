@@ -12,8 +12,8 @@ from src.agent.modules import (
 class TestTriageModule:
     """Tests for TriageModule."""
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_triage_urgent_bug(self):
+    @pytest.mark.live_api
+    def test_triage_urgent_bug(self, live_lm):
         """Test triaging an urgent bug."""
         module = TriageModule()
         result = module(
@@ -33,8 +33,8 @@ class TestTriageModule:
         assert isinstance(result.reasoning, str)
         assert len(result.reasoning) > 0
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_triage_feature_request(self):
+    @pytest.mark.live_api
+    def test_triage_feature_request(self, live_lm):
         """Test triaging a feature request."""
         module = TriageModule()
         result = module(
@@ -53,8 +53,8 @@ class TestTriageModule:
 class TestDecomposeModule:
     """Tests for DecomposeModule."""
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_decompose_complex_task(self):
+    @pytest.mark.live_api
+    def test_decompose_complex_task(self, live_lm):
         """Test decomposing a complex task."""
         module = DecomposeModule()
         result = module(
@@ -83,8 +83,8 @@ class TestDecomposeModule:
 class TestDailySummaryModule:
     """Tests for DailySummaryModule."""
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_daily_summary_with_tasks(self):
+    @pytest.mark.live_api
+    def test_daily_summary_with_tasks(self, live_lm):
         """Test generating daily summary."""
         module = DailySummaryModule()
         result = module(
@@ -121,8 +121,8 @@ class TestDailySummaryModule:
 class TestActionDeciderModule:
     """Tests for ActionDeciderModule."""
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_action_decider_create_intent(self):
+    @pytest.mark.live_api
+    def test_action_decider_create_intent(self, live_lm):
         """Test detecting create ticket intent."""
         module = ActionDeciderModule()
         result = module(
@@ -139,8 +139,8 @@ class TestActionDeciderModule:
         # Should provide response
         assert isinstance(result.response, str)
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_action_decider_search_intent(self):
+    @pytest.mark.live_api
+    def test_action_decider_search_intent(self, live_lm):
         """Test detecting search intent."""
         module = ActionDeciderModule()
         result = module(
@@ -154,8 +154,8 @@ class TestActionDeciderModule:
         # Should have search query in params
         assert isinstance(result.params, dict)
 
-    @pytest.mark.skip(reason="Requires valid API key and LLM setup")
-    def test_action_decider_conversational(self):
+    @pytest.mark.live_api
+    def test_action_decider_conversational(self, live_lm):
         """Test conversational response without action."""
         module = ActionDeciderModule()
         result = module(

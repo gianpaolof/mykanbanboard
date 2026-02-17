@@ -61,6 +61,29 @@ def reset_dspy_settings() -> Generator[None, None, None]:
 
 
 @pytest.fixture
+def live_lm() -> dspy.LM:
+    """Configure DSPy with the real LLM for live_api tests.
+
+    Reads credentials from src.config.settings (loaded from .env).
+    Skips automatically if no API key is configured.
+    """
+    from src.main import setup_dspy
+    from src.config import settings
+
+    if not settings.anthropic_api_key and not settings.openai_api_key:
+        pytest.skip("No API key configured — set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env")
+
+    setup_dspy()
+    return dspy.settings.lm
+
+
+@pytest.fixture
+def live_client(live_lm) -> TestClient:
+    """FastAPI test client with real LLM configured."""
+    return TestClient(app)
+
+
+@pytest.fixture
 def stub_lm() -> dspy.utils.DummyLM:
     """Stub DSPy LM using DummyLM for deterministic testing.
 
