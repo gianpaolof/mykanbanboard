@@ -8,8 +8,6 @@ from unittest.mock import Mock, patch
 import dspy
 from src.agent.modules import DecomposeModule, VALID_EFFORTS
 
-pytestmark = pytest.mark.anyio
-
 
 class TestDecomposeModuleBasic:
     """Test basic decompose functionality."""

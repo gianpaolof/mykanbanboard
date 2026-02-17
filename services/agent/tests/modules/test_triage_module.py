@@ -9,8 +9,6 @@ from unittest.mock import Mock, patch
 import dspy
 from src.agent.modules import TriageModule, VALID_PRIORITIES, VALID_EFFORTS
 
-pytestmark = pytest.mark.anyio
-
 
 class TestTriageModuleBasic:
     """Test basic TriageModule functionality."""

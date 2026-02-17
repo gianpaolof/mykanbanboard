@@ -34,6 +34,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-timeout>=2.3.0",
     "pytest-mock>=3.14.0",
+    "time-machine",
     "ruff>=0.6.0",
     "mypy>=1.11.0",
 ]
@@ -59,13 +60,53 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-minversion = "8.0"
-addopts = "-ra -q --strict-markers"
+minversion = "9.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "-m", "not live_api",
+]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
+markers = [
+    "live_api: mark test as requiring real LLM API (skipped by default)",
+    "integration: mark test as integration test",
+    "unit: mark test as unit test",
+    "slow: mark test as slow (> 1s)",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "tests/*",
+    "**/__pycache__/*",
+    "**/conftest.py",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
 
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "time-machine>=3.2.0",
+]

@@ -11,8 +11,6 @@ import pytest
 import asyncio
 from fastapi import HTTPException
 
-pytestmark = pytest.mark.anyio
-
 
 class TestTimeoutConstants:
     """Test that timeout constants are properly defined."""

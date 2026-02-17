@@ -1,7 +1,7 @@
-mod agent;
+pub mod agent;
 mod commands;
-mod db;
-mod error;
+pub mod db;
+pub mod error;
 mod models;
 
 use agent::{start_agent, stop_agent, AgentProcess};

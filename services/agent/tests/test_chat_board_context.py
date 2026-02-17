@@ -1,7 +1,10 @@
 """Integration tests for chat endpoint with board context."""
 
+import pytest
 from fastapi.testclient import TestClient
-from src.api.main import app
+from src.main import app
+
+pytestmark = pytest.mark.live_api
 
 client = TestClient(app)
 

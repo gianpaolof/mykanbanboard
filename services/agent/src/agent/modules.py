@@ -264,69 +264,6 @@ class BestOfNDecompose(dspy.Module):
         self.decompose = dspy.ChainOfThought(DecomposeTask)
 
     def forward(self, title: str, description: str, context: str = ""):
-        """Generate multiple decompositions and return the best one.
-
-        Args:
-            title: Task title
-            description: Task description
-            context: Additional board context
-
-        Returns:
-            Best decomposition result with subtasks, dependencies, reasoning, and score
-        """
-        candidates = []
-
-        for _ in range(self.n_candidates):
-            try:
-                result = self.decompose(
-                    title=title,
-                    description=description,
-                    context=context or "No additional context",
-                )
-
-                # Extract subtasks from result
-                subtasks = result.subtasks if isinstance(result.subtasks, list) else []
-
-                # Validate subtasks
-                valid_subtasks = []
-                for subtask in subtasks:
-                    if isinstance(subtask, dict) and subtask.get("title"):
-                        valid_subtasks.append(subtask)
-
-                if valid_subtasks:
-                    score = score_decomposition(valid_subtasks)
-                    candidates.append({
-                        "score": score,
-                        "result": result,
-                        "subtasks": valid_subtasks,
-                        "dependencies": result.dependencies if hasattr(result, "dependencies") else [],
-                        "reasoning": result.reasoning if hasattr(result, "reasoning") else "",
-                    })
-            except Exception:
-                # Skip failed decomposition attempts
-                continue
-
-        # Return best candidate or raise error if none succeeded
-        if not candidates:
-            dspy.Assert(False, "All decomposition attempts failed")
-
-        best = max(candidates, key=lambda x: x["score"])
-
-        # Validate the best result
-        dspy.Assert(
-            len(best["subtasks"]) >= 2,
-            f"Best decomposition has too few subtasks ({len(best['subtasks'])})",
-        )
-
-        return {
-            "subtasks": best["subtasks"],
-            "dependencies": best["dependencies"],
-            "reasoning": best["reasoning"],
-            "score": best["score"],
-            "candidates_evaluated": len(candidates),
-        }
-
-    def forward(self, title: str, description: str, context: str = ""):
         """Decompose a task into subtasks.
 
         Args:

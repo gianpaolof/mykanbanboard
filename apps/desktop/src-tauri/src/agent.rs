@@ -9,7 +9,10 @@ use tokio::time::sleep;
 
 // Agent server configuration
 const AGENT_BASE_URL: &str = "http://localhost:8765/api";
-const REQUEST_TIMEOUT_SECS: u64 = 15;
+/// Timeout in seconds for HTTP requests to the agent. Must exceed ANALYZE_TIMEOUT (60 s).
+pub const REQUEST_TIMEOUT_SECS: u64 = 65;  // max(60s ANALYZE_TIMEOUT) + 5s buffer
+/// The ANALYZE_TIMEOUT used by the Python agent (used for invariant assertions).
+pub const ANALYZE_TIMEOUT_SECS: u64 = 60;
 
 // Sidecar configuration
 const AGENT_STARTUP_TIMEOUT_SECS: u64 = 30;
@@ -777,4 +780,14 @@ fn create_http_client() -> Result<reqwest::Client, String> {
         .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .build()
         .map_err(|e| AppError::Http(format!("Failed to create HTTP client: {}", e)).into())
+}
+
+/// Returns the default agent base URL. Exposed for integration tests.
+pub fn agent_base_url() -> &'static str {
+    AGENT_BASE_URL
+}
+
+/// Build a reqwest client with the standard agent timeout. Exposed for integration tests.
+pub fn build_agent_client() -> Result<reqwest::Client, String> {
+    create_http_client()
 }

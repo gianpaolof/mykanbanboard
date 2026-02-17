@@ -119,3 +119,19 @@ impl Clone for Database {
         }
     }
 }
+
+impl Database {
+    /// Create an in-memory database for testing. Fast, isolated, no filesystem.
+    ///
+    /// This is intentionally public so that integration test crates can use it
+    /// without going through the filesystem-based `new()` constructor.
+    pub fn new_in_memory() -> crate::error::AppResult<Self> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 1000;")?;
+        let db = Database {
+            conn: Arc::new(Mutex::new(conn)),
+        };
+        db.run_migrations()?;
+        Ok(db)
+    }
+}
