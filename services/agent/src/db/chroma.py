@@ -71,11 +71,16 @@ class ChromaManager:
             # Combine title and description for embedding
             document = f"{title}\n\n{description}"
 
-            # Prepare metadata
-            ticket_metadata = {
+            # Prepare metadata — ChromaDB 1.4+ does not accept list values,
+            # so serialize any lists to comma-separated strings.
+            raw_metadata = {
                 "title": title,
                 "description": description,
                 **(metadata or {}),
+            }
+            ticket_metadata = {
+                k: ",".join(str(v) for v in val) if isinstance(val, list) else val
+                for k, val in raw_metadata.items()
             }
 
             # Add to collection

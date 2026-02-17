@@ -33,12 +33,13 @@ pub fn get_boards(db: State<Database>) -> Result<Vec<BoardListItem>, String> {
     let boards = stmt
         .query_map([], |row| {
             let updated_at_str: String = row.get(2)?;
+            let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()); // Fallback to now if parse fails
             Ok(BoardListItem {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                updated_at: DateTime::parse_from_rfc3339(&updated_at_str)
-                    .unwrap()
-                    .with_timezone(&Utc),
+                updated_at,
                 ticket_count: row.get(3)?,
             })
         })

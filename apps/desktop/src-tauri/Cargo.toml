@@ -23,6 +23,11 @@ reqwest = { version = "0.12", features = ["json"] }
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-shell = "2.0"
 
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full", "test-util"] }
+httpmock = "0.8"
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

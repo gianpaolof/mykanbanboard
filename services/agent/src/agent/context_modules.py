@@ -33,6 +33,18 @@ from .modules import (
 )
 
 # ============================================================================
+# COMPATIBILITY SHIM FOR DSPY.ASSERT (removed in DSPy 3.x)
+# ============================================================================
+
+def _dspy_assert(condition: bool, message: str) -> None:
+    """Compatibility shim for dspy.Assert."""
+    if not condition:
+        raise AssertionError(message)
+
+if not hasattr(dspy, 'Assert'):
+    dspy.Assert = _dspy_assert
+
+# ============================================================================
 # CONTEXT-AWARE TRIAGE SIGNATURE
 # ============================================================================
 
@@ -172,6 +184,15 @@ class ContextAwareTriageModule(dspy.Module):
             existing_labels=all_labels,
         )
 
+        # Normalize labels to list if needed
+        if not isinstance(result.labels, list):
+            if isinstance(result.labels, str):
+                result.labels = [label.strip() for label in result.labels.split(',') if label.strip()]
+            elif result.labels is None:
+                result.labels = []
+            else:
+                result.labels = [str(result.labels)]
+
         # Validate outputs
         dspy.Assert(
             result.priority in VALID_PRIORITIES,
@@ -180,10 +201,6 @@ class ContextAwareTriageModule(dspy.Module):
         dspy.Assert(
             result.effort_estimate in VALID_EFFORTS,
             f"Effort '{result.effort_estimate}' is invalid. Must be one of: {VALID_EFFORTS}",
-        )
-        dspy.Assert(
-            isinstance(result.labels, list),
-            "Labels must be a list of strings",
         )
 
         # Soft constraints

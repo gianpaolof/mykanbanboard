@@ -20,7 +20,7 @@ import type { Priority } from '@/types';
 // CONSTANTS
 // ===========================================
 
-const REQUEST_TIMEOUT_MS = 15000; // 15 seconds timeout
+const REQUEST_TIMEOUT_MS = 25000; // 25 seconds timeout (buffer over Python 20s)
 
 // ===========================================
 // TYPES
@@ -238,7 +238,7 @@ export const AgentChat = memo(({ isOpen, onClose, context }: AgentChatProps) => 
   const isCancelledRef = useRef(false);
 
   // Get store actions for executing agent commands
-  const { addTicket, columns } = useBoardStore();
+  const { addTicket, columns, currentBoardId, board, labels, tickets } = useBoardStore();
 
   // Cleanup timeout on unmount or when loading stops
   useEffect(() => {
@@ -380,10 +380,31 @@ export const AgentChat = memo(({ isOpen, onClose, context }: AgentChatProps) => 
           }
         : undefined;
 
+      // Build board context
+      const totalTickets = Object.values(tickets).reduce((sum, ticketList) => sum + ticketList.length, 0);
+      const boardContext = currentBoardId && board
+        ? {
+            board_id: currentBoardId,
+            board_name: board.name,
+            columns: columns.map(col => ({
+              id: col.id,
+              name: col.name,
+              color: col.color,
+            })),
+            labels: labels.map(label => ({
+              id: label.id,
+              name: label.name,
+              color: label.color,
+            })),
+            total_tickets: totalTickets,
+          }
+        : undefined;
+
       // Call agent API
       const result: AgentChatResult = await api.agent.chat(
         userMessage.content,
-        chatContext
+        chatContext,
+        boardContext
       );
 
       // Clear timeout since we got a response

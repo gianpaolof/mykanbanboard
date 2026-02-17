@@ -7,7 +7,7 @@ Integrates the Context Management System for:
 - Caching for expensive operations
 """
 
-from typing import Any, Optional
+from typing import Any, List, Optional
 import logging
 import asyncio
 from functools import wraps
@@ -128,7 +128,7 @@ router = APIRouter(prefix="/api")
 # Timeout constants (in seconds)
 TRIAGE_TIMEOUT = 12
 DECOMPOSE_TIMEOUT = 12
-CHAT_TIMEOUT = 12
+CHAT_TIMEOUT = 20  # Increased from 12s to give AI more time
 DAILY_SUMMARY_TIMEOUT = 10
 
 
@@ -176,6 +176,17 @@ def run_sync_with_timeout(func, timeout_seconds: int, operation_name: str):
     return run_with_timeout(wrapper(), timeout_seconds, operation_name)
 
 
+def unwrap_single_element_list(value: Any) -> Any:
+    """Unwrap single-element lists (DSPy 3.x issue).
+
+    DSPy sometimes returns values as single-element lists.
+    This helper ensures they're unwrapped to the actual value.
+    """
+    if isinstance(value, list) and len(value) == 1:
+        return value[0]
+    return value
+
+
 def extract_value(obj: Any) -> Any:
     """Extract value from DSPy prediction object.
 
@@ -184,16 +195,189 @@ def extract_value(obj: Any) -> Any:
     """
     if obj is None:
         return None
-    # If it's a bound method, it's wrong - return as string
+
+    # Handle DSPy Prediction objects - extract the actual attribute value
+    if hasattr(obj, '__class__') and 'Prediction' in obj.__class__.__name__:
+        # For Prediction objects, try to get the actual stored value
+        # DSPy stores values in _store or as direct attributes
+        if hasattr(obj, '_store'):
+            return extract_value(obj._store)
+        # Try to convert to dict and extract
+        try:
+            if hasattr(obj, '__dict__'):
+                return extract_value(obj.__dict__)
+        except:
+            pass
+
+    # If it's a bound method, try calling it, otherwise return None
     if callable(obj):
-        return str(obj)
+        try:
+            # Try calling without arguments
+            result = obj()
+            return extract_value(result)
+        except:
+            # If calling fails, return None instead of ugly string
+            return None
+
     # If it's a list, extract each item
     if isinstance(obj, list):
-        return [extract_value(item) for item in obj]
+        extracted = [extract_value(item) for item in obj]
+        # Unwrap single-element lists (DSPy sometimes returns these)
+        if len(extracted) == 1:
+            return extracted[0]
+        return extracted
+
     # If it's a dict, extract each value
     if isinstance(obj, dict):
-        return {k: extract_value(v) for k, v in obj.items()}
+        # Skip internal attributes
+        return {k: extract_value(v) for k, v in obj.items() if not k.startswith('_')}
+
     return obj
+
+
+def safe_extract(obj, attr_name, default=None):
+    """Safely extract attribute from DSPy Prediction object.
+
+    DSPy 3.x stores values in a '_store' dict. We access them
+    via __dict__['_store'] first, then fallback to getattr.
+    Also unwraps single-element lists.
+    """
+    # Method 1: DSPy 3.x _store dict (most reliable for DSPy 3.x)
+    if hasattr(obj, '__dict__') and '_store' in obj.__dict__:
+        if attr_name in obj.__dict__['_store']:
+            val = obj.__dict__['_store'][attr_name]
+            # Unwrap single-element lists
+            if isinstance(val, list) and len(val) == 1:
+                return val[0]
+            return val
+
+    # Method 2: Direct __dict__ access (fallback)
+    if hasattr(obj, '__dict__') and attr_name in obj.__dict__:
+        val = obj.__dict__[attr_name]
+        # Skip callables and internal attributes
+        if not callable(val) and not attr_name.startswith('_'):
+            # Unwrap single-element lists
+            if isinstance(val, list) and len(val) == 1:
+                return val[0]
+            return val
+
+    # Method 3: Try getattr with filtering
+    try:
+        val = getattr(obj, attr_name, None)
+        if val is not None and not callable(val):
+            # Unwrap single-element lists
+            if isinstance(val, list) and len(val) == 1:
+                return val[0]
+            return val
+    except:
+        pass
+
+    # Method 4: Fallback to default
+    return default
+
+
+def extract_labels(result: Any, field_name: str = 'labels') -> List[str]:
+    """
+    Robust labels extraction that handles DSPy quirks.
+
+    Handles:
+    - Bound methods (calls them if callable)
+    - Single-element lists (unwraps)
+    - String returns (splits on comma)
+    - Mixed types (filters to clean strings only)
+    - Reasoning text fragments (removes them)
+    - HTML/XSS content (filters for security)
+    - Duplicates (removes)
+    - Whitespace (strips)
+    - Unicode labels (preserves)
+
+    Returns:
+        List of clean, unique label strings (max 5, case-preserved)
+    """
+    # Step 1: Get raw value from DSPy 3.x _store dict first
+    labels_raw = None
+
+    # Try _store dict first (DSPy 3.x)
+    if hasattr(result, '__dict__') and '_store' in result.__dict__:
+        if field_name in result.__dict__['_store']:
+            labels_raw = result.__dict__['_store'][field_name]
+
+    # Fallback to direct __dict__ access
+    if labels_raw is None and hasattr(result, '__dict__') and field_name in result.__dict__:
+        labels_raw = result.__dict__[field_name]
+
+    # Fallback to getattr
+    elif labels_raw is None and hasattr(result, field_name):
+        labels_raw = getattr(result, field_name, None)
+
+    # Final fallback to safe_extract
+    if labels_raw is None:
+        labels_raw = safe_extract(result, field_name, [])
+
+    # Step 2: Handle callable (bound method)
+    if callable(labels_raw):
+        try:
+            labels_raw = labels_raw()
+        except (TypeError, AttributeError, RuntimeError) as e:
+            logger.warning(f"Failed to call {field_name} method: {e}")
+            return []
+
+    # Step 3: Normalize to list
+    if labels_raw is None:
+        return []
+
+    if isinstance(labels_raw, str):
+        # Split comma-separated string
+        labels_raw = [l.strip() for l in labels_raw.split(',') if l.strip()]
+
+    if not isinstance(labels_raw, list):
+        labels_raw = [str(labels_raw)]
+
+    # Step 4: Filter to clean strings only
+    clean_labels = []
+    seen = set()  # For deduplication
+
+    for label in labels_raw:
+        if not isinstance(label, str):
+            continue
+
+        # Strip whitespace
+        label = label.strip()
+
+        # Reject empty strings
+        if not label:
+            continue
+
+        # Reject bound method strings
+        if '<bound method' in label or '<bound' in label or '<built-in' in label:
+            logger.warning(f"Filtered bound method string from labels: {label[:50]}")
+            continue
+
+        # Reject HTML/script tags (XSS protection)
+        if '<' in label and '>' in label:
+            logger.warning(f"Filtered HTML/script content from labels: {label[:50]}")
+            continue
+
+        # Reject overly long strings (likely reasoning fragments)
+        if len(label) >= 30:
+            logger.warning(f"Filtered long string from labels (likely reasoning): {label[:50]}")
+            continue
+
+        # Reject strings with sentence-like patterns
+        sentence_patterns = [' because ', ' should ', ' will ', ' this ', ' when ', ' the ', ' text ', ' here ', ' there ', ' fragments ']
+        if any(pattern in label.lower() for pattern in sentence_patterns):
+            logger.warning(f"Filtered reasoning fragment from labels: {label[:50]}")
+            continue
+
+        # Deduplicate (case-sensitive)
+        if label in seen:
+            continue
+        seen.add(label)
+
+        clean_labels.append(label)
+
+    # Step 5: Limit to 5 labels max
+    return clean_labels[:5]
 
 
 # ============================================================================
@@ -301,19 +485,29 @@ async def triage_ticket(
 
         result = await run_sync_with_timeout(run_triage, TRIAGE_TIMEOUT, "Triage")
 
-        # Extract values from DSPy prediction object and ensure labels is a list
-        priority = extract_value(result.priority)
-        labels_raw = extract_value(result.labels)
-        labels = labels_raw if isinstance(labels_raw, list) else [labels_raw]
-        labels = [str(l) for l in labels[:3]]  # Ensure strings and limit to 3
-        effort = extract_value(result.effort_estimate)
-        reasoning = extract_value(result.reasoning)
+        # Extract labels using robust helper
+        labels = extract_labels(result, 'labels')
+
+        # Extract other fields
+        priority = safe_extract(result, 'priority', 'medium')
+        effort = safe_extract(result, 'effort_estimate', 'm')
+        reasoning = safe_extract(result, 'reasoning', '')
+
+        # Additional unwrapping for single-element lists (DSPy 3.x issue)
+        if isinstance(priority, list) and len(priority) == 1:
+            priority = priority[0]
+
+        # Additional unwrapping for single-element lists (DSPy 3.x issue)
+        if isinstance(effort, list) and len(effort) == 1:
+            effort = effort[0]
+        if isinstance(reasoning, list) and len(reasoning) == 1:
+            reasoning = reasoning[0]
 
         return TriageResponse(
-            priority=priority,
+            priority=unwrap_single_element_list(priority),
             labels=labels,
-            effort=effort,
-            reasoning=reasoning,
+            effort=unwrap_single_element_list(effort),
+            reasoning=unwrap_single_element_list(reasoning),
         )
 
     except HTTPException:
@@ -495,6 +689,7 @@ async def chat_with_agent(request: ChatRequest) -> ChatResponse:
             return action_decider(
                 user_message=request.message,
                 current_context=request.context or {},
+                board_context=request.board_context or {},
             )
 
         result = await run_sync_with_timeout(run_chat, CHAT_TIMEOUT, "Chat")
