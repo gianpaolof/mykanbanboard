@@ -238,11 +238,20 @@ def extract_value(obj: Any) -> Any:
 def safe_extract(obj, attr_name, default=None):
     """Safely extract attribute from DSPy Prediction object.
 
-    DSPy 3.x stores values directly as attributes. We access them
-    via __dict__ or getattr, avoiding fragile string parsing.
+    DSPy 3.x stores values in a '_store' dict. We access them
+    via __dict__['_store'] first, then fallback to getattr.
     Also unwraps single-element lists.
     """
-    # Method 1: Direct __dict__ access (most reliable)
+    # Method 1: DSPy 3.x _store dict (most reliable for DSPy 3.x)
+    if hasattr(obj, '__dict__') and '_store' in obj.__dict__:
+        if attr_name in obj.__dict__['_store']:
+            val = obj.__dict__['_store'][attr_name]
+            # Unwrap single-element lists
+            if isinstance(val, list) and len(val) == 1:
+                return val[0]
+            return val
+
+    # Method 2: Direct __dict__ access (fallback)
     if hasattr(obj, '__dict__') and attr_name in obj.__dict__:
         val = obj.__dict__[attr_name]
         # Skip callables and internal attributes
@@ -252,7 +261,7 @@ def safe_extract(obj, attr_name, default=None):
                 return val[0]
             return val
 
-    # Method 2: Try getattr with filtering
+    # Method 3: Try getattr with filtering
     try:
         val = getattr(obj, attr_name, None)
         if val is not None and not callable(val):
@@ -263,7 +272,7 @@ def safe_extract(obj, attr_name, default=None):
     except:
         pass
 
-    # Method 3: Fallback to default
+    # Method 4: Fallback to default
     return default
 
 
@@ -285,14 +294,23 @@ def extract_labels(result: Any, field_name: str = 'labels') -> List[str]:
     Returns:
         List of clean, unique label strings (max 5, case-preserved)
     """
-    # Step 1: Get raw value (try __dict__ first to avoid Mock issues)
+    # Step 1: Get raw value from DSPy 3.x _store dict first
     labels_raw = None
-    if hasattr(result, '__dict__') and field_name in result.__dict__:
+
+    # Try _store dict first (DSPy 3.x)
+    if hasattr(result, '__dict__') and '_store' in result.__dict__:
+        if field_name in result.__dict__['_store']:
+            labels_raw = result.__dict__['_store'][field_name]
+
+    # Fallback to direct __dict__ access
+    if labels_raw is None and hasattr(result, '__dict__') and field_name in result.__dict__:
         labels_raw = result.__dict__[field_name]
-    elif hasattr(result, field_name):
+
+    # Fallback to getattr
+    elif labels_raw is None and hasattr(result, field_name):
         labels_raw = getattr(result, field_name, None)
 
-    # Fallback to safe_extract if direct access didn't work
+    # Final fallback to safe_extract
     if labels_raw is None:
         labels_raw = safe_extract(result, field_name, [])
 

@@ -95,7 +95,7 @@ class TriageTicket(dspy.Signature):
         desc="Priority level based on urgency and impact"
     )
     labels: list[str] = dspy.OutputField(
-        desc="List of max 3 relevant labels, prefer existing ones"
+        desc="List of max 3 relevant labels from existing_labels that are most appropriate for this ticket. Return as JSON array of strings, e.g. [\"frontend\", \"bug\"]"
     )
     effort_estimate: Literal["xs", "s", "m", "l", "xl"] = dspy.OutputField(
         desc="Estimated effort to complete"
