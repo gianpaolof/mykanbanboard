@@ -139,14 +139,20 @@ class TriageModule(dspy.Module):
             else:
                 result.labels = [str(result.labels)]
 
+        # Unwrap single-element lists (DSPy 3.x may return ["high"] instead of "high")
+        if isinstance(result.priority, list) and len(result.priority) == 1:
+            result.priority = result.priority[0]
+        if isinstance(result.effort_estimate, list) and len(result.effort_estimate) == 1:
+            result.effort_estimate = result.effort_estimate[0]
+
         # Hard constraints - will retry automatically if failed
         dspy.Assert(
             result.priority in VALID_PRIORITIES,
-            f"Priority '{result.priority}' is invalid. Must be one of: {VALID_PRIORITIES}",
+            f"priority '{result.priority}' is invalid. Must be one of: {VALID_PRIORITIES}",
         )
         dspy.Assert(
             result.effort_estimate in VALID_EFFORTS,
-            f"Effort '{result.effort_estimate}' is invalid. Must be one of: {VALID_EFFORTS}",
+            f"effort '{result.effort_estimate}' is invalid. Must be one of: {VALID_EFFORTS}",
         )
 
         # Soft constraints - will log warning but continue
@@ -201,6 +207,49 @@ class DecomposeModule(dspy.Module):
     def __init__(self):
         super().__init__()
         self.decompose = dspy.ChainOfThought(DecomposeTask)
+
+    def forward(self, title: str, description: str, context: str = ""):
+        """Decompose a task into subtasks.
+
+        Args:
+            title: Task title
+            description: Task description
+            context: Additional context from the board
+
+        Returns:
+            Decomposition with subtasks, dependencies, and reasoning
+        """
+        result = self.decompose(
+            title=title,
+            description=description,
+            context=context or "No additional context",
+        )
+
+        # Hard constraints
+        dspy.Assert(
+            isinstance(result.subtasks, list),
+            "subtasks must be a list",
+        )
+        dspy.Assert(
+            len(result.subtasks) >= 2,
+            f"Must generate at least 2 subtasks, got {len(result.subtasks)}",
+        )
+        dspy.Assert(
+            len(result.subtasks) <= 10,
+            f"Too many subtasks ({len(result.subtasks)}). Must have at most 10.",
+        )
+        dspy.Assert(
+            isinstance(result.dependencies, list),
+            "dependencies must be a list",
+        )
+
+        for i, subtask in enumerate(result.subtasks):
+            dspy.Assert(
+                isinstance(subtask, dict) and "title" in subtask,
+                f"Subtask {i} must be a dict with at least a 'title' key",
+            )
+
+        return result
 
 
 # ============================================================================
